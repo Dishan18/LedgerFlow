@@ -30,6 +30,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/dev/token").permitAll()
+                        // Platform-wide data: only operations staff, never merchants.
+                        .requestMatchers("/v1/reconciliation/**").hasAuthority("SCOPE_ops")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
         return http.build();

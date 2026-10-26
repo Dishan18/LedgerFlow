@@ -58,6 +58,9 @@ public class Payment extends AssignedIdEntity {
     @Column(name = "next_status_check_at")
     private Instant nextStatusCheckAt;
 
+    @Column(name = "settled_at")
+    private Instant settledAt;
+
     @Version
     private long version;
 
@@ -125,6 +128,22 @@ public class Payment extends AssignedIdEntity {
      */
     public void scheduleStatusCheck(Instant at) {
         this.nextStatusCheckAt = at;
+    }
+
+    /**
+     * Records that the bank's settlement file confirmed this payment.
+     *
+     * @return true if this call moved the payment from CAPTURED to SETTLED
+     */
+    public boolean markSettled(Instant at) {
+        if (settledAt == null) {
+            settledAt = at;
+        }
+        if (status == PaymentStatus.CAPTURED) {
+            transitionTo(PaymentStatus.SETTLED);
+            return true;
+        }
+        return false;
     }
 
     public void recordStatusCheck() {
@@ -210,6 +229,10 @@ public class Payment extends AssignedIdEntity {
 
     public Instant getNextStatusCheckAt() {
         return nextStatusCheckAt;
+    }
+
+    public Instant getSettledAt() {
+        return settledAt;
     }
 
     public Instant getCreatedAt() {

@@ -5,16 +5,16 @@ A payments backend with a double-entry ledger, built with Java 21 and Spring Boo
 Merchants create payments, capture them and refund them. Every money movement is recorded
 as a balanced, append-only journal entry, and every POST is idempotent.
 
-> Work in progress, built in phases. Phases 1-4 (core domain, concurrency proof, unreliable
-> bank, events and webhooks) are done. Architecture diagram, results table and design write-up come in Phase 7.
+> Work in progress, built in phases. Phases 1-5 (core domain, concurrency proof, unreliable
+> bank, events and webhooks, reconciliation) are done. Architecture diagram, results table and design write-up come in Phase 7.
 
 ## Modules
 
 | Module | What it is |
 |---|---|
-| `common` | Contracts shared by the services (error codes, bank API, webhook signatures) |
-| `ledgerflow-api` | Payments, ledger, idempotency, outbox relay, bank client, status poller, webhooks |
-| `mock-bank` | Simulated unreliable PSP/bank with a UPI-style collect API |
+| `common` | Contracts shared by the services (error codes, bank API, webhook signatures, settlement file format) |
+| `ledgerflow-api` | Payments, ledger, idempotency, outbox relay, bank client, status poller, webhooks, reconciliation |
+| `mock-bank` | Simulated unreliable PSP/bank: UPI-style collect API and daily settlement files |
 
 ## Run it locally
 
@@ -23,7 +23,7 @@ Prerequisites: JDK 21 and Docker Desktop. Maven is not needed; use the wrapper.
 ```bash
 docker compose up -d --wait          # PostgreSQL 17 + LocalStack (SNS, SQS, S3, Secrets Manager)
 python tools/merchant_receiver.py 0  # optional: demo merchant on :9090 that verifies webhook signatures
-./mvnw -pl mock-bank -am spring-boot:run                                          # port 8081
+./mvnw -pl mock-bank -am spring-boot:run -Dspring-boot.run.profiles=local        # port 8081
 ./mvnw -pl ledgerflow-api -am spring-boot:run -Dspring-boot.run.profiles=local    # port 8080
 ```
 
@@ -64,6 +64,7 @@ Amounts are integer **paise** (25000 = Rs 250).
 | GET | `/v1/payments/{id}` | |
 | POST | `/v1/payments/{id}/capture` | Full capture, posts the journal entry. Needs `Idempotency-Key`. |
 | POST | `/v1/payments/{id}/refunds` | Partial or full. Needs `Idempotency-Key`. |
+| GET | `/v1/reconciliation/{date}` | Latest report for an IST business date. Needs an `ops`-scoped token (`/dev/token?scope=ops` locally). |
 
 ## Tests
 
@@ -117,3 +118,23 @@ come back after an exponential SQS visibility timeout, and after 5 attempts they
 
 Reproduce: start everything as above with `python tools/merchant_receiver.py 0.3`, then run
 `python tools/chaos_run.py 300`.
+
+### Reconciliation (Phase 5)
+
+Each night (EventBridge Scheduler in AWS; `POST localhost:8081/bank/v1/settlements/{date}` locally) mock-bank
+writes `settlements/<date>/settlement.csv` to S3. The S3 event goes through SQS to LedgerFlow, which matches
+the file against its payments and reports **matched, missing-in-bank, missing-in-ledger, duplicate and
+amount-mismatch** records. The report is stored in Postgres, served at `GET /v1/reconciliation/{date}` and
+copied to `reports/<date>.json` in S3. Matched captured payments become `SETTLED`.
+
+mock-bank can plant mistakes in the file (`?drop=&duplicate=&wrongAmount=&phantom=`) and keeps an answer
+key next to it, so reconciliation can be scored:
+
+| Measure | Result |
+|---|---|
+| Planted discrepancies caught (10 of each kind, 292-row file) | 40 / 40 (100%) |
+| False alarms | 0 |
+| Clean file, same day | 282 / 282 matched |
+| jqwik property (random mixes of all 4 kinds + noise) | every planted discrepancy caught, nothing else reported |
+
+Reproduce: `python tools/chaos_run.py 300` then `python tools/reconcile_run.py 10 10 10 10`.

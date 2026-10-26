@@ -76,3 +76,7 @@ ledgerflow:
     max-attempts: 5
     initial-backoff: 10s
     max-backoff: 5m
+  reconciliation:
+    queue: ${SETTLEMENT_FILES_QUEUE:settlement-files}
+    reports-bucket: ${SETTLEMENT_BUCKET:ledgerflow-settlements}
+    reports-prefix: reports/

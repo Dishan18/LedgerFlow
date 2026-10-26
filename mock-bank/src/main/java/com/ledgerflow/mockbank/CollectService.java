@@ -3,9 +3,12 @@ package com.ledgerflow.mockbank;
 import com.ledgerflow.common.bank.CollectRequest;
 import com.ledgerflow.common.bank.CollectResponse;
 import com.ledgerflow.common.bank.CollectStatus;
+import com.ledgerflow.common.settlement.SettlementCsv;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -66,6 +69,16 @@ public class CollectService {
 
     public Optional<CollectResponse> status(UUID paymentId) {
         return Optional.ofNullable(transactions.get(paymentId)).map(t -> t.viewAt(clock.instant()));
+    }
+
+    /** Collects approved (as of now) that were created on {@code date} in the business time zone. */
+    public List<BankTransaction> approvedOn(LocalDate date) {
+        Instant now = clock.instant();
+        return transactions.values().stream()
+                .filter(t -> t.statusAt(now) == CollectStatus.APPROVED)
+                .filter(t -> LocalDate.ofInstant(t.createdAt(), SettlementCsv.BUSINESS_ZONE).equals(date))
+                .sorted(Comparator.comparing(BankTransaction::createdAt))
+                .toList();
     }
 
     private BankTransaction create(CollectRequest request, Scenario scenario, int attempt) {

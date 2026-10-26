@@ -9,6 +9,9 @@ import java.util.Set;
  * Payment lifecycle. The transition table below is the single source of truth: anything
  * not listed is illegal. FAILED and REFUNDED are terminal (no outgoing transitions).
  *
+ * <p>Only a CAPTURED payment moves to SETTLED. A payment refunded before settlement keeps its refund
+ * status, and reconciliation records the settlement in {@code settledAt} instead.
+ *
  * <pre>
  * CREATED ──► AUTHORIZED ──► CAPTURED ──► SETTLED
  *    │            ▲              │  │         │
@@ -33,7 +36,7 @@ public enum PaymentStatus {
             AUTHORIZED, EnumSet.of(CAPTURED),
             CAPTURED, EnumSet.of(SETTLED, PARTIALLY_REFUNDED, REFUNDED),
             SETTLED, EnumSet.of(PARTIALLY_REFUNDED, REFUNDED),
-            PARTIALLY_REFUNDED, EnumSet.of(PARTIALLY_REFUNDED, REFUNDED, SETTLED),
+            PARTIALLY_REFUNDED, EnumSet.of(PARTIALLY_REFUNDED, REFUNDED),
             REFUNDED, EnumSet.noneOf(PaymentStatus.class),
             FAILED, EnumSet.noneOf(PaymentStatus.class));
 

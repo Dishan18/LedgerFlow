@@ -28,16 +28,23 @@ public class DevTokenController {
         this.encoder = NimbusJwtEncoder.withSecretKey(SecurityConfig.jwtKey(properties)).build();
     }
 
+    /**
+     * @param merchantId token for this merchant, or
+     * @param scope      e.g. {@code ops} for an operations token (subject "ops-user")
+     */
     @PostMapping("/dev/token")
-    public Map<String, String> token(@RequestParam UUID merchantId) {
+    public Map<String, String> token(@RequestParam(required = false) UUID merchantId,
+                                     @RequestParam(required = false) String scope) {
         Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .subject(merchantId.toString())
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
+                .subject(merchantId != null ? merchantId.toString() : "ops-user")
                 .issuedAt(now)
-                .expiresAt(now.plus(Duration.ofHours(12)))
-                .build();
+                .expiresAt(now.plus(Duration.ofHours(12)));
+        if (scope != null) {
+            claims.claim("scope", scope);
+        }
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-        String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        String token = encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
         return Map.of("access_token", token, "token_type", "Bearer");
     }
 }

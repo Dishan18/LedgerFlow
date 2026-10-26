@@ -1,0 +1,10 @@
+# Local development against LocalStack from docker-compose.yml.
+spring:
+  cloud:
+    aws:
+      endpoint: http://localhost:4566
+      credentials:
+        access-key: test
+        secret-key: test
+      s3:
+        path-style-access-enabled: true

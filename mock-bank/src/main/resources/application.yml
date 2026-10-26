@@ -1,6 +1,10 @@
 spring:
   application:
     name: mock-bank
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:ap-south-1}
 
 server:
   port: 8081
@@ -28,3 +32,7 @@ mockbank:
     pending-approve-rate: 0.8
     hang: 10s
     pending-resolve-after: 15s
+  settlement:
+    bucket: ${SETTLEMENT_BUCKET:ledgerflow-settlements}
+    prefix: settlements/
+    trigger-queue: ${SETTLEMENT_TRIGGER_QUEUE:settlement-trigger}

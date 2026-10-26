@@ -85,6 +85,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.cloud.aws.region.static", () -> "ap-south-1");
         registry.add("spring.cloud.aws.credentials.access-key", LOCALSTACK::getAccessKey);
         registry.add("spring.cloud.aws.credentials.secret-key", LOCALSTACK::getSecretKey);
+        registry.add("spring.cloud.aws.s3.path-style-access-enabled", () -> "true");
     }
 
     @BeforeEach

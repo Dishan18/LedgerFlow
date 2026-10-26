@@ -30,7 +30,8 @@ services:
     volumes:
       - ./infra/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf localhost:4566/_localstack/init/ready | grep -q '\"completed\": true'"]
+      # Healthy only once init-aws.sh has run to the end without errors.
+      test: ["CMD-SHELL", "test -f /tmp/ledgerflow-init.done"]
       interval: 5s
       timeout: 3s
       retries: 20

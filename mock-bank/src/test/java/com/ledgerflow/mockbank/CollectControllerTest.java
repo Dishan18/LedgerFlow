@@ -16,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 @SpringBootTest(properties = {
+        // No AWS in this test: the settlement trigger's SQS listener stays off.
+        "spring.cloud.aws.sqs.enabled=false",
         "mockbank.chaos.min-delay=0ms",
         "mockbank.chaos.max-delay=0ms",
         "mockbank.chaos.hang=0ms",
