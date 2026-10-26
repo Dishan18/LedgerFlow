@@ -58,3 +58,18 @@ Amounts are integer **paise** (25000 = Rs 250).
 ```bash
 ./mvnw verify      # unit + jqwik property tests, then Testcontainers integration tests (needs Docker)
 ```
+
+### Concurrency proofs (Phase 2)
+
+The integration tests print `[proof]` lines. Typical results on a laptop:
+
+| Scenario | Result |
+|---|---|
+| 1,000 concurrent debits of one account funded for 500 | 500 posted, 500 rejected, balance 0, imbalance 0 paise |
+| 1,000 concurrent transfers in both directions across 5 accounts | 0 deadlocks, total conserved, imbalance 0 paise |
+| 200 concurrent creates with one Idempotency-Key | 1 payment |
+| 200 concurrent captures (half retries, half fresh keys) | 1 capture, customer charged once |
+| 300 concurrent Rs 1 refunds of a Rs 100 payment | exactly 100 succeed |
+
+Removing the account row lock makes these tests fail: all 1,000 debits "succeed" and
+money disappears from cached balances through lost updates.

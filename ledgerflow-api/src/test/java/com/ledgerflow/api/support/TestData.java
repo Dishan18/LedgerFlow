@@ -2,6 +2,7 @@ package com.ledgerflow.api.support;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
+import com.ledgerflow.api.config.LedgerflowProperties;
 import com.ledgerflow.api.ledger.Account;
 import com.ledgerflow.api.ledger.AccountRepository;
 import com.ledgerflow.api.ledger.AccountType;
@@ -10,8 +11,17 @@ import com.ledgerflow.api.ledger.JournalEntryDraft;
 import com.ledgerflow.api.ledger.LedgerService;
 import com.ledgerflow.api.merchant.Merchant;
 import com.ledgerflow.api.merchant.MerchantRepository;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.test.context.TestComponent;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -23,12 +33,18 @@ public class TestData {
     private final AccountRepository accounts;
     private final LedgerService ledger;
     private final TransactionTemplate tx;
+    private final LedgerflowProperties properties;
 
-    public TestData(MerchantRepository merchants, AccountRepository accounts, LedgerService ledger, TransactionTemplate tx) {
+    public TestData(MerchantRepository merchants,
+                    AccountRepository accounts,
+                    LedgerService ledger,
+                    TransactionTemplate tx,
+                    LedgerflowProperties properties) {
         this.merchants = merchants;
         this.accounts = accounts;
         this.ledger = ledger;
         this.tx = tx;
+        this.properties = properties;
     }
 
     public UUID merchant(int feeBps) {
@@ -58,6 +74,25 @@ public class TestData {
 
     public long balance(AccountType type, String ownerId) {
         return accounts.findByAccountTypeAndOwnerId(type, ownerId).orElseThrow().getBalance();
+    }
+
+    public UUID accountId(AccountType type, String ownerId) {
+        return accounts.findIdByTypeAndOwner(type, ownerId).orElseThrow();
+    }
+
+    /** A real HS256 token, signed with the app's key, for tests that go over HTTP instead of MockMvc. */
+    public String bearerToken(UUID merchantId) {
+        SecretKeySpec key = new SecretKeySpec(
+                properties.security().jwtSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject(merchantId.toString())
+                .issuedAt(now)
+                .expiresAt(now.plus(Duration.ofHours(1)))
+                .build();
+        return NimbusJwtEncoder.withSecretKey(key).build()
+                .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                .getTokenValue();
     }
 
     public static RequestPostProcessor as(UUID merchantId) {
