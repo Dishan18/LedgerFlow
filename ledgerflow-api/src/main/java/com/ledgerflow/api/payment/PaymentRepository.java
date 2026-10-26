@@ -16,4 +16,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.id = :id and p.merchantId = :merchantId")
     Optional<Payment> lockByIdAndMerchantId(@Param("id") UUID id, @Param("merchantId") UUID merchantId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Payment p where p.id = :id")
+    Optional<Payment> lockById(@Param("id") UUID id);
 }

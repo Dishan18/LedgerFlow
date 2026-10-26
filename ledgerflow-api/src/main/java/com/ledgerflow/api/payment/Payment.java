@@ -49,6 +49,15 @@ public class Payment extends AssignedIdEntity {
     @Column(name = "bank_reference", length = 64)
     private String bankReference;
 
+    @Column(name = "failure_reason")
+    private String failureReason;
+
+    @Column(name = "status_check_attempts", nullable = false)
+    private int statusCheckAttempts;
+
+    @Column(name = "next_status_check_at")
+    private Instant nextStatusCheckAt;
+
     @Version
     private long version;
 
@@ -93,6 +102,33 @@ public class Payment extends AssignedIdEntity {
     public void markAuthorized(String bankReference) {
         transitionTo(PaymentStatus.AUTHORIZED);
         this.bankReference = bankReference;
+        this.nextStatusCheckAt = null;
+    }
+
+    public void markFailed(String reason) {
+        transitionTo(PaymentStatus.FAILED);
+        this.failureReason = reason;
+        this.nextStatusCheckAt = null;
+    }
+
+    /** The bank's answer is unknown or pending: wait, and ask again at {@code nextCheckAt}. */
+    public void markPendingConfirmation(Instant nextCheckAt) {
+        if (status != PaymentStatus.PENDING_CONFIRMATION) {
+            transitionTo(PaymentStatus.PENDING_CONFIRMATION);
+        }
+        this.nextStatusCheckAt = nextCheckAt;
+    }
+
+    /**
+     * Safety net set at creation: if the request thread dies before recording the bank's answer,
+     * the poller picks the payment up at this time.
+     */
+    public void scheduleStatusCheck(Instant at) {
+        this.nextStatusCheckAt = at;
+    }
+
+    public void recordStatusCheck() {
+        this.statusCheckAttempts++;
     }
 
     public void capture() {
@@ -162,6 +198,18 @@ public class Payment extends AssignedIdEntity {
 
     public String getBankReference() {
         return bankReference;
+    }
+
+    public String getFailureReason() {
+        return failureReason;
+    }
+
+    public int getStatusCheckAttempts() {
+        return statusCheckAttempts;
+    }
+
+    public Instant getNextStatusCheckAt() {
+        return nextStatusCheckAt;
     }
 
     public Instant getCreatedAt() {

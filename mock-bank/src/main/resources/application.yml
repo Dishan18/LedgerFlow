@@ -10,3 +10,21 @@ management:
     web:
       exposure:
         include: health
+
+logging:
+  structured:
+    format:
+      console: ecs
+
+# Default chaos: roughly 1 in 4 collects misbehaves in some way.
+mockbank:
+  chaos:
+    min-delay: 20ms
+    max-delay: 300ms
+    error-rate: 0.05
+    timeout-rate: 0.05
+    decline-rate: 0.05
+    pending-rate: 0.10
+    pending-approve-rate: 0.8
+    hang: 10s
+    pending-resolve-after: 15s

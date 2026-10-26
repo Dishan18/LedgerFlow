@@ -13,6 +13,7 @@ public record PaymentResponse(
         long refundedAmount,
         String currency,
         String status,
+        String failureReason,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -26,6 +27,7 @@ public record PaymentResponse(
                 payment.getRefundedAmount(),
                 payment.getCurrency(),
                 payment.getStatus().name(),
+                payment.getFailureReason(),
                 payment.getCreatedAt(),
                 payment.getUpdatedAt());
     }

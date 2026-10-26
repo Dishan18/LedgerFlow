@@ -49,6 +49,11 @@ public enum PaymentStatus {
         return ALLOWED.get(this).isEmpty();
     }
 
+    /** Waiting for the bank: the status poller follows these up. */
+    public boolean isAwaitingBank() {
+        return this == CREATED || this == PENDING_CONFIRMATION;
+    }
+
     /** States from which money can be returned to the customer. */
     public boolean isRefundable() {
         return this == CAPTURED || this == SETTLED || this == PARTIALLY_REFUNDED;

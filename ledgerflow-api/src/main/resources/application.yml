@@ -40,3 +40,20 @@ ledgerflow:
   idempotency:
     retention: 24h
     cleanup-cron: "0 0 * * * *"
+  bank:
+    base-url: ${BANK_URL:http://localhost:8081}
+    connect-timeout: 1s
+    read-timeout: 2s
+    max-retries: 2
+    initial-backoff: 200ms
+    max-backoff: 1s
+  status-poller:
+    enabled: true
+    interval: 5s
+    batch-size: 50
+    first-check-after: 5s
+    max-check-interval: 5m
+    stuck-created-after: 1m
+    not-found-grace: 2m
+    max-pending-age: 30m
+    lease: 1m

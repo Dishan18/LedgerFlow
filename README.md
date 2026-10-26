@@ -5,16 +5,16 @@ A payments backend with a double-entry ledger, built with Java 21 and Spring Boo
 Merchants create payments, capture them and refund them. Every money movement is recorded
 as a balanced, append-only journal entry, and every POST is idempotent.
 
-> Work in progress, built in phases. Phase 1 (core domain) is done. Architecture diagram,
-> results table and design write-up come in Phase 7.
+> Work in progress, built in phases. Phases 1-3 (core domain, concurrency proof, unreliable
+> bank) are done. Architecture diagram, results table and design write-up come in Phase 7.
 
 ## Modules
 
 | Module | What it is |
 |---|---|
-| `common` | Contracts shared by the services (error codes) |
-| `ledgerflow-api` | Payments, ledger, idempotency, outbox |
-| `mock-bank` | Simulated unreliable bank (Phase 3) |
+| `common` | Contracts shared by the services (error codes, bank API) |
+| `ledgerflow-api` | Payments, ledger, idempotency, outbox, bank client, status poller |
+| `mock-bank` | Simulated unreliable PSP/bank with a UPI-style collect API |
 
 ## Run it locally
 
@@ -22,8 +22,15 @@ Prerequisites: JDK 21 and Docker Desktop. Maven is not needed; use the wrapper.
 
 ```bash
 docker compose up -d                 # PostgreSQL 17
-./mvnw -pl ledgerflow-api -am spring-boot:run -Dspring-boot.run.profiles=local
+./mvnw -pl mock-bank -am spring-boot:run                                          # port 8081
+./mvnw -pl ledgerflow-api -am spring-boot:run -Dspring-boot.run.profiles=local    # port 8080
 ```
+
+mock-bank misbehaves on purpose (delays, outages, lost responses, pending collects; see
+`mockbank.chaos` in its `application.yml`). Add a tag to the customer id to force one
+behaviour, like a PSP sandbox's magic test values: `+approve`, `+decline`, `+pending`,
+`+pending-decline`, `+timeout`, `+error`, `+flaky` (for example `cust_alice+timeout`).
+Tagged customers need their own ledger account, so the untagged demo customers are the easy start.
 
 The `local` profile loads demo data: merchant `11111111-1111-1111-1111-111111111111` (2% fee)
 and customers `cust_alice` / `cust_bob` with Rs 10,000 each.
@@ -73,3 +80,14 @@ The integration tests print `[proof]` lines. Typical results on a laptop:
 
 Removing the account row lock makes these tests fail: all 1,000 debits "succeed" and
 money disappears from cached balances through lost updates.
+
+### Unreliable bank (Phase 3)
+
+300 payments through mock-bank with its default chaos (about 1 in 4 collects misbehaves):
+
+| Measure | Result |
+|---|---|
+| Final answer right away | 271 (257 authorized, 14 declined) |
+| Needed the status poller | 29, all resolved within ~20 s |
+| Final state | 275 authorized, 25 failed, 0 stuck |
+| Disagreements between LedgerFlow and the bank | 0 |

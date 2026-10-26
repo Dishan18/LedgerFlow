@@ -12,7 +12,7 @@
 
     <artifactId>mock-bank</artifactId>
     <name>LedgerFlow :: Mock Bank</name>
-    <description>Simulated, unreliable PSP/bank (filled in during Phase 3)</description>
+    <description>Simulated, unreliable PSP/bank with a UPI-style collect API</description>
 
     <dependencies>
         <dependency>
@@ -30,6 +30,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
