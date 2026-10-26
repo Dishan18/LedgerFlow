@@ -7,6 +7,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -51,17 +53,27 @@ public class PaymentStatusPoller {
         this.clock = clock;
     }
 
-    /** Runs one round. Returns how many payments were checked. */
+    /**
+     * Runs one round. Returns how many payments were checked.
+     *
+     * <p>The bank calls in a batch run in parallel on virtual threads: each one is mostly waiting on
+     * the network, and one at a time a batch of 50 slow answers would take far longer than the
+     * polling interval. Each check is independent and records its result in its own transaction.
+     */
     public int pollOnce() {
         List<UUID> due = claimDue(clock.instant());
-        for (UUID paymentId : due) {
-            try {
-                check(paymentId);
-            } catch (RuntimeException e) {
-                // Leave it; the lease expires and a later round tries again.
-                log.error("Status check failed for payment {}", paymentId, e);
+        try (ExecutorService checks = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (UUID paymentId : due) {
+                checks.submit(() -> {
+                    try {
+                        check(paymentId);
+                    } catch (RuntimeException e) {
+                        // Leave it; the lease expires and a later round tries again.
+                        log.error("Status check failed for payment {}", paymentId, e);
+                    }
+                });
             }
-        }
+        } // waits for every check to finish
         return due.size();
     }
 

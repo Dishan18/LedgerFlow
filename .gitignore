@@ -38,3 +38,6 @@ LedgerFlow_Build_Prompt.md
 
 # Local tool output
 tools/receiver_stats.json
+
+# k6 raw output
+loadtest/results/

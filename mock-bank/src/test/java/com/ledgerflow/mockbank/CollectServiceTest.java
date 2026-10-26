@@ -18,6 +18,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.Random;
 import java.util.random.RandomGenerator;
 import org.junit.jupiter.api.Test;
 
@@ -132,7 +133,7 @@ class CollectServiceTest {
     }
 
     private CollectService service(ChaosProperties chaos) {
-        RandomGenerator random = RandomGenerator.of("L64X128MixRandom");
+        RandomGenerator random = new Random();
         Sleeper recordingSleeper = new Sleeper() {
             @Override
             public synchronized void sleep(Duration duration) {

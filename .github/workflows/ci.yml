@@ -34,16 +34,6 @@ jobs:
             **/target/surefire-reports/
             **/target/failsafe-reports/
 
-      - name: Keep jars for deployment
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v7
-        with:
-          name: jars
-          path: |
-            ledgerflow-api/target/ledgerflow-api-*.jar
-            mock-bank/target/mock-bank-*.jar
-          retention-days: 3
-
   deploy:
     name: Deploy to AWS
     needs: build
@@ -62,10 +52,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: jars
-
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
@@ -74,6 +60,7 @@ jobs:
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # The Dockerfile compiles the module itself; tests already passed in the build job.
       - name: Build and push images
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}

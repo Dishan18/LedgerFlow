@@ -102,6 +102,33 @@ class ConcurrentTransfersIT extends AbstractIntegrationTest {
         assertLedgerIsSound();
     }
 
+    @Test
+    void thousandConcurrentCreditsToOneUnguardedHotAccountLoseNothing() throws Exception {
+        // Merchant receivable accounts are updated with atomic increments and no read lock;
+        // concurrent credits must still all land.
+        UUID merchant = data.merchant(0);
+        UUID receivable = data.accountId(AccountType.MERCHANT_RECEIVABLE, merchant.toString());
+        List<UUID> payers = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            payers.add(data.accountId(AccountType.CUSTOMER, data.customer(100_000)));
+        }
+
+        List<Callable<Outcome>> tasks = new ArrayList<>();
+        for (int i = 0; i < TRANSFERS; i++) {
+            UUID from = payers.get(i % payers.size());
+            tasks.add(() -> transfer(from, receivable, 37));
+        }
+
+        ConcurrentRunner.Result<Outcome> result = ConcurrentRunner.runAll(tasks);
+        Map<Outcome, Long> counts = count(result.outcomes());
+
+        report("unguarded hot account", result, counts);
+        assertThat(unexpected).as("unexpected errors (deadlocks, lock timeouts...)").isEmpty();
+        assertThat(counts.get(Outcome.POSTED)).isEqualTo(TRANSFERS);
+        assertThat(data.balance(AccountType.MERCHANT_RECEIVABLE, merchant.toString())).isEqualTo(TRANSFERS * 37L);
+        assertLedgerIsSound();
+    }
+
     private Outcome transfer(UUID from, UUID to, long amount) {
         try {
             tx.executeWithoutResult(status -> ledger.post(

@@ -1,0 +1,5 @@
+# Running inside docker-compose (with the local profile): webhooks go to the merchant-receiver
+# container instead of localhost. Hostnames come from environment variables in docker-compose.yml.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed,classpath:db/seed-compose

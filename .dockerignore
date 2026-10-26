@@ -1,8 +1,9 @@
-target/
-**/target/*
-!ledgerflow-api/target/ledgerflow-api-*.jar
-!mock-bank/target/mock-bank-*.jar
+**/target/
 .git
+.github
+.idea
 infra
 tools
+loadtest
 *.md
+**/.jqwik-database

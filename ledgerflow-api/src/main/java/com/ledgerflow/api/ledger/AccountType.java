@@ -30,6 +30,11 @@ public enum AccountType {
         return normalSide;
     }
 
+    /** How a line changes this account's balance: + on the normal side, - on the other. */
+    public long signedAmount(Direction direction, long amount) {
+        return direction == normalSide ? amount : Math.negateExact(amount);
+    }
+
     /** Customer balances must never go below zero; system and merchant accounts may. */
     public boolean allowNegative() {
         return allowNegative;

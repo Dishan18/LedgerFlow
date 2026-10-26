@@ -1,12 +1,14 @@
 package com.ledgerflow.api.ledger;
 
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -30,4 +32,24 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id in :ids order by a.id")
     List<Account> lockAllById(@Param("ids") Collection<UUID> ids);
+
+    /** Type and overdraft rule of these accounts. Reads three columns; loads no entities. */
+    @Query("select a.id as id, a.accountType as accountType, a.allowNegative as allowNegative from Account a where a.id in :ids")
+    List<PostingRule> findPostingRules(@Param("ids") Collection<UUID> ids);
+
+    interface PostingRule {
+        UUID getId();
+
+        AccountType getAccountType();
+
+        boolean getAllowNegative();
+    }
+
+    /**
+     * Atomic increment for accounts that may go negative: no read, so no lost update, and the row
+     * lock it takes lasts only until commit.
+     */
+    @Modifying
+    @Query("update Account a set a.balance = a.balance + :delta, a.updatedAt = :now where a.id = :id")
+    int addToBalance(@Param("id") UUID id, @Param("delta") long delta, @Param("now") Instant now);
 }

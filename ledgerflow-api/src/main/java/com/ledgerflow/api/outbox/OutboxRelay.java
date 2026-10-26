@@ -13,7 +13,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.MessageAttributeValue;
-import software.amazon.awssdk.services.sns.model.PublishRequest;
+import software.amazon.awssdk.services.sns.model.PublishBatchRequest;
+import software.amazon.awssdk.services.sns.model.PublishBatchRequestEntry;
+import software.amazon.awssdk.services.sns.model.PublishBatchResponse;
 
 /**
  * Moves committed outbox rows to SNS.
@@ -27,6 +29,8 @@ import software.amazon.awssdk.services.sns.model.PublishRequest;
 public class OutboxRelay {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxRelay.class);
+
+    private static final int SNS_BATCH_LIMIT = 10;
 
     record PendingEvent(UUID id, String eventType, String payload) {
     }
@@ -64,21 +68,30 @@ public class OutboxRelay {
                             rs.getString("payload")))
                     .list();
 
+            // SNS takes up to 10 messages per call: 10x fewer round trips while we hold the row locks.
             int count = 0;
-            for (PendingEvent event : batch) {
+            for (int from = 0; from < batch.size(); from += SNS_BATCH_LIMIT) {
+                List<PendingEvent> chunk = batch.subList(from, Math.min(from + SNS_BATCH_LIMIT, batch.size()));
+                List<UUID> accepted;
                 try {
-                    publish(event);
+                    accepted = publish(chunk);
                 } catch (RuntimeException e) {
-                    // Keep what already went out and stop; the rest stays unpublished for the next round.
-                    log.warn("Publishing outbox event {} failed, will retry: {}", event.id(), e.toString());
+                    log.warn("Publishing outbox batch failed, will retry: {}", e.toString());
                     meters.counter("ledgerflow.outbox.publish.failures").increment();
                     break;
                 }
-                jdbc.sql("UPDATE outbox_event SET published_at = :now WHERE id = :id")
-                        .param("now", Timestamp.from(clock.instant()))
-                        .param("id", event.id())
-                        .update();
-                count++;
+                for (UUID id : accepted) {
+                    jdbc.sql("UPDATE outbox_event SET published_at = :now WHERE id = :id")
+                            .param("now", Timestamp.from(clock.instant()))
+                            .param("id", id)
+                            .update();
+                }
+                count += accepted.size();
+                if (accepted.size() < chunk.size()) {
+                    // Keep what went out and stop; the rest stays unpublished for the next round.
+                    meters.counter("ledgerflow.outbox.publish.failures").increment(chunk.size() - accepted.size());
+                    break;
+                }
             }
             return count;
         });
@@ -88,13 +101,27 @@ public class OutboxRelay {
         return published == null ? 0 : published;
     }
 
-    private void publish(PendingEvent event) {
-        sns.publish(PublishRequest.builder()
+    /** Publishes up to 10 events in one call. Returns the ids SNS accepted. */
+    private List<UUID> publish(List<PendingEvent> events) {
+        List<PublishBatchRequestEntry> entries = events.stream()
+                .map(event -> PublishBatchRequestEntry.builder()
+                        .id(event.id().toString())
+                        .message(event.payload())
+                        .messageAttributes(Map.of(
+                                "eventType", MessageAttributeValue.builder().dataType("String")
+                                        .stringValue(event.eventType()).build(),
+                                "eventId", MessageAttributeValue.builder().dataType("String")
+                                        .stringValue(event.id().toString()).build()))
+                        .build())
+                .toList();
+        PublishBatchResponse response = sns.publishBatch(PublishBatchRequest.builder()
                 .topicArn(properties.topicArn())
-                .message(event.payload())
-                .messageAttributes(Map.of(
-                        "eventType", MessageAttributeValue.builder().dataType("String").stringValue(event.eventType()).build(),
-                        "eventId", MessageAttributeValue.builder().dataType("String").stringValue(event.id().toString()).build()))
+                .publishBatchRequestEntries(entries)
                 .build());
+        if (!response.failed().isEmpty()) {
+            log.warn("SNS rejected {} of {} outbox events: {}", response.failed().size(), events.size(),
+                    response.failed().getFirst().message());
+        }
+        return response.successful().stream().map(ok -> UUID.fromString(ok.id())).toList();
     }
 }

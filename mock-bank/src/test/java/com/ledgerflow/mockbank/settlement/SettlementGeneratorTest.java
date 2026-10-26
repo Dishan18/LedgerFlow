@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Random;
 import java.util.random.RandomGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ class SettlementGeneratorTest {
 
     @BeforeEach
     void setUp() {
-        RandomGenerator random = RandomGenerator.of("L64X128MixRandom");
+        RandomGenerator random = new Random();
         ChaosProperties calm = new ChaosProperties(Duration.ZERO, Duration.ZERO, 0, 0, 0, 0, 1, Duration.ZERO,
                 Duration.ofSeconds(15));
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);

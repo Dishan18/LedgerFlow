@@ -10,14 +10,19 @@ import org.springframework.stereotype.Component;
 class PaymentStatusPollerJob {
 
     private final PaymentStatusPoller poller;
+    private final StatusPollerProperties properties;
 
-    PaymentStatusPollerJob(PaymentStatusPoller poller) {
+    PaymentStatusPollerJob(PaymentStatusPoller poller, StatusPollerProperties properties) {
         this.poller = poller;
+        this.properties = properties;
     }
 
-    /** One batch per tick keeps each round short and predictable. */
+    /** Drains the backlog in full batches, so a burst of pending payments doesn't wait many ticks. */
     @Scheduled(fixedDelayString = "${ledgerflow.status-poller.interval}")
     void poll() {
-        poller.pollOnce();
+        int checked;
+        do {
+            checked = poller.pollOnce();
+        } while (checked == properties.batchSize());
     }
 }

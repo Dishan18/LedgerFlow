@@ -1,3 +1,6 @@
+# Whole system locally:   docker compose up --build
+# Only the dependencies:  docker compose up -d postgres localstack   (then run the apps with ./mvnw)
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -21,8 +24,7 @@ services:
     environment:
       SERVICES: sns,sqs,s3,secretsmanager
       AWS_DEFAULT_REGION: ap-south-1
-      # Queue URLs on the request's own host (localhost) instead of *.localhost.localstack.cloud,
-      # which needs a public DNS lookup.
+      # Queue URLs on localhost instead of *.localhost.localstack.cloud, which needs a public DNS lookup.
       SQS_ENDPOINT_STRATEGY: path
       LOCALSTACK_HOST: localhost:4566
     ports:
@@ -34,7 +36,59 @@ services:
       test: ["CMD-SHELL", "test -f /tmp/ledgerflow-init.done"]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
+
+  mock-bank:
+    build:
+      context: .
+      args:
+        MODULE: mock-bank
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_CLOUD_AWS_ENDPOINT: http://localstack:4566
+      # Chaos is tunable per run, e.g. BANK_TIMEOUT_RATE=0 for a load test.
+      MOCKBANK_CHAOS_MIN_DELAY: ${BANK_MIN_DELAY:-20ms}
+      MOCKBANK_CHAOS_MAX_DELAY: ${BANK_MAX_DELAY:-300ms}
+      MOCKBANK_CHAOS_ERROR_RATE: ${BANK_ERROR_RATE:-0.05}
+      MOCKBANK_CHAOS_TIMEOUT_RATE: ${BANK_TIMEOUT_RATE:-0.05}
+      MOCKBANK_CHAOS_DECLINE_RATE: ${BANK_DECLINE_RATE:-0.05}
+      MOCKBANK_CHAOS_PENDING_RATE: ${BANK_PENDING_RATE:-0.10}
+    ports:
+      - "8081:8081"
+    depends_on:
+      localstack:
+        condition: service_healthy
+
+  ledgerflow-api:
+    build:
+      context: .
+      args:
+        MODULE: ledgerflow-api
+    environment:
+      SPRING_PROFILES_ACTIVE: local,compose
+      SPRING_CLOUD_AWS_ENDPOINT: http://localstack:4566
+      DB_URL: jdbc:postgresql://postgres:5432/ledgerflow
+      BANK_URL: http://mock-bank:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      mock-bank:
+        condition: service_started
+
+  # Demo merchant: verifies webhook signatures and prints a summary to receiver_stats.json.
+  merchant-receiver:
+    image: python:3.13-slim
+    environment:
+      RECEIVER_HOST: 0.0.0.0
+    command: ["python", "/tools/merchant_receiver.py", "${MERCHANT_FAIL_RATE:-0.1}", "/tmp/receiver_stats.json"]
+    volumes:
+      - ./tools:/tools:ro
+    ports:
+      - "9090:9090"
 
 volumes:
   pgdata:

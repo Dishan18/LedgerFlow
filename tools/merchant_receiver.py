@@ -3,6 +3,7 @@ and fails a configurable share of requests on purpose. Prints a summary on Ctrl+
 import hashlib
 import hmac
 import json
+import os
 import random
 import sys
 import threading
@@ -50,4 +51,6 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-ThreadingHTTPServer(("localhost", 9090), Handler).serve_forever()
+# In a container, listen on all interfaces so other containers can reach us.
+HOST = os.environ.get("RECEIVER_HOST", "localhost")
+ThreadingHTTPServer((HOST, 9090), Handler).serve_forever()
