@@ -23,6 +23,10 @@ public class Merchant extends AssignedIdEntity {
     @Column(name = "fee_bps", nullable = false)
     private int feeBps;
 
+    /** Where payment events are POSTed. Null means the merchant doesn't want webhooks. */
+    @Column(name = "webhook_url", length = 2048)
+    private String webhookUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -32,9 +36,14 @@ public class Merchant extends AssignedIdEntity {
     }
 
     public Merchant(UUID id, String name, int feeBps) {
+        this(id, name, feeBps, null);
+    }
+
+    public Merchant(UUID id, String name, int feeBps, String webhookUrl) {
         this.id = id;
         this.name = name;
         this.feeBps = feeBps;
+        this.webhookUrl = webhookUrl;
     }
 
     public UUID getId() {
@@ -47,5 +56,9 @@ public class Merchant extends AssignedIdEntity {
 
     public int getFeeBps() {
         return feeBps;
+    }
+
+    public String getWebhookUrl() {
+        return webhookUrl;
     }
 }

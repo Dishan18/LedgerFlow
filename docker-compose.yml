@@ -15,5 +15,25 @@ services:
       timeout: 3s
       retries: 10
 
+  localstack:
+    # Pinned: LocalStack images released after 4.14 require an auth token even for free use.
+    image: localstack/localstack:4.14.0
+    environment:
+      SERVICES: sns,sqs,s3,secretsmanager
+      AWS_DEFAULT_REGION: ap-south-1
+      # Queue URLs on the request's own host (localhost) instead of *.localhost.localstack.cloud,
+      # which needs a public DNS lookup.
+      SQS_ENDPOINT_STRATEGY: path
+      LOCALSTACK_HOST: localhost:4566
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./infra/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:4566/_localstack/init/ready | grep -q '\"completed\": true'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   pgdata:

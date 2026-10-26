@@ -1,5 +1,6 @@
 package com.ledgerflow.api.support;
 
+import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,11 +11,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.lifecycle.Startables;
+import org.testcontainers.localstack.LocalStackContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.utility.MountableFile;
 
 /**
- * Boots the whole app against a real PostgreSQL in Docker. The container is started once per
- * JVM and shared by every integration test class (and by Spring's cached context).
+ * Boots the whole app against real PostgreSQL and LocalStack (SNS, SQS, Secrets Manager) in
+ * Docker. Containers start once per JVM and are shared by every integration test class (and by
+ * Spring's cached context).
  *
  * <p>The app listens on a real random port, so tests can use either MockMvc (fast, in-process)
  * or a real HTTP client (needed when many requests must truly run in parallel).
@@ -37,7 +44,11 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
                 "ledgerflow.bank.max-backoff=50ms",
                 "ledgerflow.status-poller.first-check-after=1s",
                 // Tests drive the poller by hand so nothing changes state behind their back.
-                "ledgerflow.status-poller.enabled=false"
+                "ledgerflow.status-poller.enabled=false",
+                // Fast event pipeline: relay often, retry webhooks after 1s instead of minutes.
+                "ledgerflow.outbox.poll-interval=200ms",
+                "ledgerflow.webhooks.initial-backoff=1s",
+                "ledgerflow.webhooks.max-backoff=1s"
         })
 @AutoConfigureMockMvc
 @Import({TestData.class, LedgerAudit.class})
@@ -46,15 +57,34 @@ public abstract class AbstractIntegrationTest {
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
 
+    /** Same image and init script as docker-compose.yml, so tests run against the same topology. */
+    static final LocalStackContainer LOCALSTACK = new LocalStackContainer(
+            DockerImageName.parse("localstack/localstack:4.14.0"))
+            .withEnv("SERVICES", "sns,sqs,s3,secretsmanager")
+            .withEnv("AWS_DEFAULT_REGION", "ap-south-1")
+            .withEnv("SQS_ENDPOINT_STRATEGY", "path")
+            .withCopyFileToContainer(
+                    MountableFile.forHostPath("../infra/localstack/init-aws.sh", 0755),
+                    "/etc/localstack/init/ready.d/init-aws.sh")
+            .waitingFor(Wait.forLogMessage(".*LedgerFlow LocalStack resources ready.*", 1)
+                    .withStartupTimeout(Duration.ofMinutes(2)));
+
+    /** Must match the secret created by init-aws.sh. */
+    protected static final String WEBHOOK_SECRET = "whsec_local_dev_secret_change_me";
+
     protected static final FakeBank BANK = FakeBank.start();
 
     static {
-        POSTGRES.start();
+        Startables.deepStart(POSTGRES, LOCALSTACK).join();
     }
 
     @DynamicPropertySource
-    static void bankUrl(DynamicPropertyRegistry registry) {
+    static void externalServices(DynamicPropertyRegistry registry) {
         registry.add("ledgerflow.bank.base-url", BANK::baseUrl);
+        registry.add("spring.cloud.aws.endpoint", () -> LOCALSTACK.getEndpoint().toString());
+        registry.add("spring.cloud.aws.region.static", () -> "ap-south-1");
+        registry.add("spring.cloud.aws.credentials.access-key", LOCALSTACK::getAccessKey);
+        registry.add("spring.cloud.aws.credentials.secret-key", LOCALSTACK::getSecretKey);
     }
 
     @BeforeEach

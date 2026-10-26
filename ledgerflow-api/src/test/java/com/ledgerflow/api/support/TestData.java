@@ -48,9 +48,13 @@ public class TestData {
     }
 
     public UUID merchant(int feeBps) {
+        return merchant(feeBps, null);
+    }
+
+    public UUID merchant(int feeBps, String webhookUrl) {
         UUID id = UUID.randomUUID();
         tx.executeWithoutResult(s -> {
-            merchants.save(new Merchant(id, "Test merchant " + id, feeBps));
+            merchants.save(new Merchant(id, "Test merchant " + id, feeBps, webhookUrl));
             accounts.save(Account.open(AccountType.MERCHANT_RECEIVABLE, id.toString()));
         });
         return id;

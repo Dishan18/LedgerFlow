@@ -35,3 +35,6 @@ LedgerFlow_Build_Prompt.md
 
 # jqwik failure database
 .jqwik-database
+
+# Local tool output
+tools/receiver_stats.json

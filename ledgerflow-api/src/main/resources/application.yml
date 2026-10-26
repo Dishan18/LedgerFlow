@@ -14,6 +14,10 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:ap-south-1}
 
 server:
   port: 8080
@@ -57,3 +61,18 @@ ledgerflow:
     not-found-grace: 2m
     max-pending-age: 30m
     lease: 1m
+  outbox:
+    enabled: true
+    poll-interval: 500ms
+    batch-size: 100
+    topic-arn: ${PAYMENT_EVENTS_TOPIC_ARN:arn:aws:sns:ap-south-1:000000000000:payment-events}
+  webhooks:
+    queue: ${WEBHOOK_QUEUE:webhook-delivery}
+    signing-secret-id: ${WEBHOOK_SIGNING_SECRET_ID:ledgerflow/webhook-signing-secret}
+    secret-cache-ttl: 5m
+    connect-timeout: 2s
+    read-timeout: 5s
+    # Must match maxReceiveCount in the queue's redrive policy (LocalStack init script / Terraform).
+    max-attempts: 5
+    initial-backoff: 10s
+    max-backoff: 5m

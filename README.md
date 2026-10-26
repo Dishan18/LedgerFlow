@@ -5,15 +5,15 @@ A payments backend with a double-entry ledger, built with Java 21 and Spring Boo
 Merchants create payments, capture them and refund them. Every money movement is recorded
 as a balanced, append-only journal entry, and every POST is idempotent.
 
-> Work in progress, built in phases. Phases 1-3 (core domain, concurrency proof, unreliable
-> bank) are done. Architecture diagram, results table and design write-up come in Phase 7.
+> Work in progress, built in phases. Phases 1-4 (core domain, concurrency proof, unreliable
+> bank, events and webhooks) are done. Architecture diagram, results table and design write-up come in Phase 7.
 
 ## Modules
 
 | Module | What it is |
 |---|---|
-| `common` | Contracts shared by the services (error codes, bank API) |
-| `ledgerflow-api` | Payments, ledger, idempotency, outbox, bank client, status poller |
+| `common` | Contracts shared by the services (error codes, bank API, webhook signatures) |
+| `ledgerflow-api` | Payments, ledger, idempotency, outbox relay, bank client, status poller, webhooks |
 | `mock-bank` | Simulated unreliable PSP/bank with a UPI-style collect API |
 
 ## Run it locally
@@ -21,10 +21,15 @@ as a balanced, append-only journal entry, and every POST is idempotent.
 Prerequisites: JDK 21 and Docker Desktop. Maven is not needed; use the wrapper.
 
 ```bash
-docker compose up -d                 # PostgreSQL 17
+docker compose up -d --wait          # PostgreSQL 17 + LocalStack (SNS, SQS, S3, Secrets Manager)
+python tools/merchant_receiver.py 0  # optional: demo merchant on :9090 that verifies webhook signatures
 ./mvnw -pl mock-bank -am spring-boot:run                                          # port 8081
 ./mvnw -pl ledgerflow-api -am spring-boot:run -Dspring-boot.run.profiles=local    # port 8080
 ```
+
+LocalStack is pinned to 4.14.0: newer LocalStack images require an auth token. Its init script
+([infra/localstack/init-aws.sh](infra/localstack/init-aws.sh)) creates the SNS topic, the SQS
+queue with its DLQ and redrive policy, and the webhook signing secret.
 
 mock-bank misbehaves on purpose (delays, outages, lost responses, pending collects; see
 `mockbank.chaos` in its `application.yml`). Add a tag to the customer id to force one
@@ -91,3 +96,24 @@ money disappears from cached balances through lost updates.
 | Needed the status poller | 29, all resolved within ~20 s |
 | Final state | 275 authorized, 25 failed, 0 stuck |
 | Disagreements between LedgerFlow and the bank | 0 |
+
+### Events and webhooks (Phase 4)
+
+Every payment change writes an outbox row in the same transaction. A relay publishes the rows to
+SNS `payment-events`, which fans out to SQS `webhook-delivery`. The dispatcher signs each event
+(`X-LedgerFlow-Signature: t=...,v1=HMAC-SHA256`) and POSTs it to the merchant. Failed deliveries
+come back after an exponential SQS visibility timeout, and after 5 attempts they go to the DLQ.
+
+300 payments (640 events) against a demo merchant that fails 30% of requests on purpose
+(`tools/merchant_receiver.py 0.3`, which verifies signatures in Python, independently of the Java code):
+
+| Measure | Result |
+|---|---|
+| Events published by the outbox relay | 640 / 640 |
+| Delivered after retries | 633 (98.9%) |
+| Delivered first try / 2nd / 3rd / 4th / 5th | 412 / 139 / 49 / 27 / 6 |
+| Dead-lettered after 5 attempts (DLQ count) | 7 |
+| Signatures rejected by the merchant | 0 |
+
+Reproduce: start everything as above with `python tools/merchant_receiver.py 0.3`, then run
+`python tools/chaos_run.py 300`.
