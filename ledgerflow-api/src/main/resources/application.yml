@@ -27,6 +27,13 @@ management:
     web:
       exposure:
         include: health,info,metrics
+  # Micrometer -> CloudWatch. Off by default; the aws profile switches it on.
+  cloudwatch:
+    metrics:
+      export:
+        enabled: false
+        namespace: LedgerFlow
+        step: 1m
 
 logging:
   structured:

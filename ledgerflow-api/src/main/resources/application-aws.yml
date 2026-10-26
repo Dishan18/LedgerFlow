@@ -1,0 +1,13 @@
+# Running on ECS Fargate. Everything environment-specific (DB endpoint, queue names, topic ARN,
+# bucket, secrets) arrives as environment variables from the task definition (Terraform).
+spring:
+  flyway:
+    # Demo merchant and funded customers, so the deployed API can be exercised. A real deployment
+    # would onboard merchants through a back-office flow instead.
+    locations: classpath:db/migration,classpath:db/seed
+
+management:
+  cloudwatch:
+    metrics:
+      export:
+        enabled: true

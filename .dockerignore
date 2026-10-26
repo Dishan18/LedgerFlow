@@ -1,0 +1,8 @@
+target/
+**/target/*
+!ledgerflow-api/target/ledgerflow-api-*.jar
+!mock-bank/target/mock-bank-*.jar
+.git
+infra
+tools
+*.md

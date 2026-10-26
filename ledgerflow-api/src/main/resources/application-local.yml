@@ -1,7 +1,7 @@
 # Local development: adds demo merchants and funded customers, and plain-text logs.
 spring:
   flyway:
-    locations: classpath:db/migration,classpath:db/seed
+    locations: classpath:db/migration,classpath:db/seed,classpath:db/seed-local
   cloud:
     aws:
       # LocalStack from docker-compose.yml

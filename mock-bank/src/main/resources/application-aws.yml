@@ -1,0 +1,6 @@
+# Running on ECS Fargate: bucket and queue names arrive as environment variables (Terraform).
+# Slightly calmer chaos than local so the demo stays readable.
+mockbank:
+  chaos:
+    hang: 5s
+    pending-resolve-after: 30s

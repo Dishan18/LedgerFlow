@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+alert_email        = "you@example.com"
+monthly_budget_usd = 50
+# github_repository = "Dishan18/LedgerFlow"
+# region            = "ap-south-1"

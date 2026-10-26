@@ -140,7 +140,9 @@ class WebhookDeliveryIT extends AbstractIntegrationTest {
         // Simulate the relay crashing after publishing but before marking the row: same event again.
         sns.publish(b -> b.topicArn(outboxProperties.topicArn()).message(created.getPayload()));
 
-        Eventually.await("duplicate reached the consumer", PIPELINE_TIMEOUT,
+        // In a full test run the queue may still hold hundreds of events from earlier test classes,
+        // and the duplicate waits its turn behind them.
+        Eventually.await("duplicate reached the consumer", Duration.ofSeconds(120),
                 () -> meters.counter("ledgerflow.webhooks.duplicates").count() > duplicatesBefore);
         long deliveriesOfCreated = receiver.received().stream().filter(r -> r.eventId().equals(created.getId())).count();
         assertThat(deliveriesOfCreated).isEqualTo(1);

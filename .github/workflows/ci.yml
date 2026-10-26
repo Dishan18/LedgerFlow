@@ -1,0 +1,119 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # Unit + jqwik property tests, then Testcontainers integration tests (Postgres, LocalStack).
+      - name: mvn verify
+        run: ./mvnw -B verify
+
+      - name: Keep test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+
+      - name: Keep jars for deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: jars
+          path: |
+            ledgerflow-api/target/ledgerflow-api-*.jar
+            mock-bank/target/mock-bank-*.jar
+          retention-days: 3
+
+  deploy:
+    name: Deploy to AWS
+    needs: build
+    # Runs once the AWS_DEPLOY_ROLE_ARN repository variable exists (it's a Terraform output).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets the job ask GitHub for an OIDC token to exchange for AWS credentials
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+      CLUSTER: ledgerflow
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: jars
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          for module in ledgerflow-api mock-bank; do
+            image="$REGISTRY/ledgerflow/$module"
+            docker build --build-arg MODULE=$module -t "$image:$GITHUB_SHA" -t "$image:latest" .
+            docker push --all-tags "$image"
+          done
+
+      - name: Current task definitions
+        run: |
+          aws ecs describe-task-definition --task-definition ledgerflow-mock-bank --query taskDefinition > mock-bank-td.json
+          aws ecs describe-task-definition --task-definition ledgerflow-api --query taskDefinition > api-td.json
+
+      # mock-bank first: the new API version may rely on it.
+      - id: mock-bank-td
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: mock-bank-td.json
+          container-name: mock-bank
+          image: ${{ steps.ecr.outputs.registry }}/ledgerflow/mock-bank:${{ github.sha }}
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.mock-bank-td.outputs.task-definition }}
+          cluster: ${{ env.CLUSTER }}
+          service: mock-bank
+          wait-for-service-stability: true
+
+      - id: api-td
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: api-td.json
+          container-name: ledgerflow-api
+          image: ${{ steps.ecr.outputs.registry }}/ledgerflow/ledgerflow-api:${{ github.sha }}
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.api-td.outputs.task-definition }}
+          cluster: ${{ env.CLUSTER }}
+          service: ledgerflow-api
+          wait-for-service-stability: true
