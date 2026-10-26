@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: ledgerflow-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ledgerflow}
+    username: ${DB_USERNAME:ledgerflow}
+    password: ${DB_PASSWORD:ledgerflow}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  structured:
+    format:
+      console: ecs
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+ledgerflow:
+  security:
+    # Overridden by JWT_SECRET (Secrets Manager in AWS). This default is for local use only.
+    jwt-secret: ${JWT_SECRET:local-dev-secret-change-me-0123456789abcdef}
+  idempotency:
+    retention: 24h
+    cleanup-cron: "0 0 * * * *"

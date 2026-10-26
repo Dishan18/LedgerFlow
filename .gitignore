@@ -32,3 +32,6 @@ Thumbs.db
 
 # Local build-prompt notes (not part of the project)
 LedgerFlow_Build_Prompt.md
+
+# jqwik failure database
+.jqwik-database
