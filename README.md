@@ -10,6 +10,9 @@ webhooks with retries and a dead-letter queue, and the ledger is reconciled ever
 the bank's settlement file. The bank is simulated by **mock-bank**, which is deliberately
 unreliable: slow, sometimes down, sometimes "pending", and sometimes it loses responses.
 
+**Docs:** [High-level design](docs/HLD.md) · [Low-level design](docs/LLD.md) ·
+[Full guide](docs/guide.html) (architecture, AWS mapping, demo script, interview Q&A; open the file in a browser)
+
 ## Architecture
 
 ```mermaid

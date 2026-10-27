@@ -1,0 +1,1211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LedgerFlow Guide</title>
+<meta name="description" content="Everything about LedgerFlow: architecture, design, AWS, metrics, demo steps and interview questions.">
+<style>
+:root {
+  --bg: #fbfaf7; --surface: #ffffff; --surface-2: #f3f1ec; --text: #1d1d1b; --muted: #5d5b55;
+  --border: #e3e0d8; --accent: #0f6e56; --accent-soft: #e2f1ec; --warn: #8a5a00; --warn-soft: #fbf0d9;
+  --code-bg: #f4f2ed; --link: #0b6b8f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141412; --surface: #1c1c1a; --surface-2: #242421; --text: #ecebe6; --muted: #a8a69e;
+    --border: #34332f; --accent: #5cc8a5; --accent-soft: #19332b; --warn: #f0c060; --warn-soft: #33290f;
+    --code-bg: #20201d; --link: #6cc3e6;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141412; --surface: #1c1c1a; --surface-2: #242421; --text: #ecebe6; --muted: #a8a69e;
+  --border: #34332f; --accent: #5cc8a5; --accent-soft: #19332b; --warn: #f0c060; --warn-soft: #33290f;
+  --code-bg: #20201d; --link: #6cc3e6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--link); }
+code, pre, kbd { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.88em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px;
+  overflow-x: auto; line-height: 1.45; position: relative; }
+pre code { background: none; padding: 0; }
+.layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1240px; margin: 0 auto; }
+nav.toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 24px 16px;
+  border-right: 1px solid var(--border); font-size: 14px; }
+nav.toc .brand { font-weight: 700; font-size: 18px; margin-bottom: 4px; }
+nav.toc .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+nav.toc ol { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+nav.toc li { counter-increment: s; }
+nav.toc a { display: block; padding: 5px 8px; border-radius: 6px; color: var(--text); text-decoration: none; }
+nav.toc a::before { content: counter(s) ". "; color: var(--muted); }
+nav.toc a:hover, nav.toc a.active { background: var(--accent-soft); color: var(--accent); }
+main { padding: 32px 40px 80px; min-width: 0; }
+h1 { font-size: 34px; line-height: 1.2; margin: 0 0 8px; }
+h2 { font-size: 26px; margin: 56px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+h3 { font-size: 19px; margin: 28px 0 8px; }
+.lead { font-size: 18px; color: var(--muted); max-width: 760px; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+.pill { background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14.5px; }
+.table-wrap { overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface-2); font-weight: 600; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.stat .num { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.stat .lbl { color: var(--muted); font-size: 13.5px; }
+.note { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+.warn { border-left: 4px solid var(--warn); background: var(--warn-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+.mermaid { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; overflow-x: auto; text-align: center; }
+details.qa { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin: 10px 0; }
+details.qa summary { cursor: pointer; padding: 12px 16px; font-weight: 600; list-style: none; display: flex; gap: 10px; }
+details.qa summary::-webkit-details-marker { display: none; }
+details.qa summary .n { color: var(--accent); min-width: 28px; }
+details.qa[open] summary { border-bottom: 1px solid var(--border); }
+details.qa .a { padding: 4px 18px 12px; }
+.step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; margin: 18px 0; }
+.step .badge { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--bg);
+  display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.step h4 { margin: 3px 0 6px; font-size: 16.5px; }
+.copy { position: absolute; top: 6px; right: 6px; font-size: 12px; padding: 2px 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+.copy:hover { color: var(--accent); }
+.toolbar { display: flex; justify-content: flex-end; gap: 8px; }
+.toolbar button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer; }
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
+  nav.toc ol { columns: 2; column-gap: 12px; }
+  main { padding: 20px 16px 60px; }
+  h1 { font-size: 27px; }
+  h2 { font-size: 22px; }
+}
+@media print { nav.toc, .copy, .toolbar { display: none; } .layout { display: block; } details.qa { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="brand">LedgerFlow</div>
+  <div class="sub">Project guide &amp; interview prep</div>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#scenario">Real-world scenario</a></li>
+    <li><a href="#stack">Tech stack</a></li>
+    <li><a href="#hld">High-level design</a></li>
+    <li><a href="#lld">Low-level design</a></li>
+    <li><a href="#aws">AWS: where and why</a></li>
+    <li><a href="#folders">Folder structure</a></li>
+    <li><a href="#pipeline">Pipelines</a></li>
+    <li><a href="#metrics">Metrics &amp; results</a></li>
+    <li><a href="#scale">Scalability</a></li>
+    <li><a href="#demo">Run the demo locally</a></li>
+    <li><a href="#qa">Interview questions</a></li>
+    <li><a href="#tradeoffs">Trade-offs &amp; limits</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+<div class="toolbar"><button id="expand">Expand all answers</button><button id="theme">Toggle theme</button></div>
+
+<!-- ======================================================= -->
+<section id="overview">
+<h1>LedgerFlow</h1>
+<p class="lead">A payments backend with a double-entry ledger, built with Java 21 and Spring Boot 4. Merchants take
+UPI-style payments through it; every rupee that moves is a balanced, append-only journal entry; every POST is
+idempotent; events reach merchants as signed webhooks; and the books are reconciled every night against the bank.</p>
+<div class="pills">
+  <span class="pill">Java 21</span><span class="pill">Spring Boot 4.1</span><span class="pill">PostgreSQL 17</span>
+  <span class="pill">AWS SNS / SQS / S3</span><span class="pill">ECS Fargate</span><span class="pill">Terraform</span>
+  <span class="pill">Testcontainers</span><span class="pill">jqwik</span><span class="pill">k6</span><span class="pill">GitHub Actions</span>
+</div>
+
+<h3>The 30-second pitch</h3>
+<div class="card">
+"LedgerFlow is a payments service like a tiny Razorpay. A merchant creates a payment, the service gets it
+authorized by a bank, and on capture it moves money through a double-entry ledger that the database itself
+keeps balanced. I built it to stay correct when things go wrong: 1,000 concurrent requests on one account,
+clients retrying the same request, a bank that times out or loses responses, and merchants whose servers are
+down. It has a transactional outbox to SNS and SQS for signed webhooks with retries and a dead-letter queue,
+and a nightly reconciliation against the bank's settlement file in S3. Under a k6 load test it sustained 175
+payments a second with p99 under 200 ms and zero ledger imbalance, and reconciliation caught 100% of
+deliberately planted mistakes."
+</div>
+
+<h3>Six problems it solves</h3>
+<div class="table-wrap"><table>
+<tr><th>Problem</th><th>Solution in LedgerFlow</th></tr>
+<tr><td>Money must never be created or lost</td><td>Double-entry ledger; DB triggers reject unbalanced or edited entries; <code>long</code> paise, no floats</td></tr>
+<tr><td>Two requests spend the same balance</td><td><code>SELECT … FOR UPDATE</code> on customer accounts in id order, plus a <code>CHECK (balance &gt;= 0)</code></td></tr>
+<tr><td>Client retries charge twice</td><td><code>Idempotency-Key</code> claimed with <code>INSERT … ON CONFLICT DO NOTHING</code> before any work</td></tr>
+<tr><td>Bank is slow, down, or loses answers</td><td>Timeouts, retries with backoff (bank dedupes by payment id), <code>PENDING_CONFIRMATION</code> + status poller</td></tr>
+<tr><td>Merchant must hear about every event</td><td>Transactional outbox → SNS → SQS → HMAC-signed webhooks, exponential retries, DLQ</td></tr>
+<tr><td>Books must match the bank</td><td>Nightly settlement CSV in S3 → automatic reconciliation report with 4 discrepancy types</td></tr>
+</table></div>
+</section>
+
+<!-- ======================================================= -->
+<section id="scenario">
+<h2>Real-world scenario</h2>
+<p>Follow one ₹250 chai order at "Chai Point" (merchant fee 2%) through a bad day.</p>
+
+<div class="step"><div class="badge">1</div><div>
+<h4>Customer pays, network flickers</h4>
+<p>Chai Point's backend calls <code>POST /v1/payments</code> with <code>Idempotency-Key: order-42</code>. The phone's
+network drops the response, so the app retries with the same key. LedgerFlow sees the key is already
+<code>COMPLETED</code> and replays the stored response with <code>Idempotent-Replayed: true</code>. One payment, not two.</p>
+</div></div>
+
+<div class="step"><div class="badge">2</div><div>
+<h4>The bank goes quiet</h4>
+<p>LedgerFlow asks the bank to collect. The bank takes the money but its response never arrives (a timeout).
+LedgerFlow retries twice; because the bank deduplicates by payment id, the retry returns the same collect instead
+of charging again. Still no definite answer, so the payment becomes <code>PENDING_CONFIRMATION</code> and the
+merchant gets a <code>payment.pending_confirmation</code> webhook.</p>
+</div></div>
+
+<div class="step"><div class="badge">3</div><div>
+<h4>The poller finds out</h4>
+<p>Five seconds later the status poller asks the bank "what happened to this payment?" The bank says approved, so
+the payment becomes <code>AUTHORIZED</code> and a <code>payment.authorized</code> webhook goes out. If the bank had said
+"never heard of it" after a 2-minute grace period, the payment would be <code>FAILED</code> instead.</p>
+</div></div>
+
+<div class="step"><div class="badge">4</div><div>
+<h4>Capture moves the money</h4>
+<p>Chai Point captures. In one database transaction: the payment becomes <code>CAPTURED</code>, a journal entry
+debits the customer ₹250, credits Chai Point ₹245 and credits the platform ₹5, and an outbox row is written. If
+the customer's balance were too low, the whole transaction would roll back with <code>INSUFFICIENT_FUNDS</code>.</p>
+</div></div>
+
+<div class="step"><div class="badge">5</div><div>
+<h4>The merchant's server is down</h4>
+<p>The <code>payment.captured</code> webhook gets a 503. SQS redelivers it after 10 s, 20 s, 40 s, 80 s. It succeeds on
+attempt 3. Had it failed 5 times, it would land in the dead-letter queue and a CloudWatch alarm would email the team.</p>
+</div></div>
+
+<div class="step"><div class="badge">6</div><div>
+<h4>Customer wants ₹100 back</h4>
+<p>A partial refund posts the mirror-image entry: Chai Point gives back ₹98, the platform gives back ₹2 of its
+fee, and the customer gets ₹100. Status becomes <code>PARTIALLY_REFUNDED</code>.</p>
+</div></div>
+
+<div class="step"><div class="badge">7</div><div>
+<h4>Midnight: does everything match?</h4>
+<p>At 00:30 IST the bank drops its settlement file into S3. LedgerFlow matches every row: this payment matches and
+becomes <code>SETTLED</code>. Elsewhere it finds one payment the bank listed twice, one with a different amount, one
+the bank has but LedgerFlow doesn't, and one LedgerFlow has but the bank doesn't. Operations staff see all of
+this at <code>GET /v1/reconciliation/2026-10-27</code>.</p>
+</div></div>
+</section>
+
+<!-- ======================================================= -->
+<section id="stack">
+<h2>Tech stack</h2>
+<div class="table-wrap"><table>
+<tr><th>Area</th><th>Choice</th><th>Why</th></tr>
+<tr><td>Language</td><td>Java 21</td><td>Records, sealed interfaces, pattern-matching <code>switch</code>, virtual threads (used by the status poller)</td></tr>
+<tr><td>Framework</td><td>Spring Boot 4.1 (Spring 7, Jackson 3, Hibernate 7)</td><td>Industry standard for payment backends; built-in retry, security, SQS listeners</td></tr>
+<tr><td>Database</td><td>PostgreSQL 17 + Flyway</td><td>ACID, row locks, <code>SKIP LOCKED</code>, deferred constraint triggers, JSONB</td></tr>
+<tr><td>Messaging</td><td>AWS SNS + SQS (Spring Cloud AWS 4)</td><td>Managed, durable, fan-out + DLQ out of the box</td></tr>
+<tr><td>Storage</td><td>AWS S3</td><td>Settlement files and reports, with event notifications</td></tr>
+<tr><td>Security</td><td>Spring Security resource server, HS256 JWT</td><td>Stateless auth; merchant id in <code>sub</code>, <code>ops</code> scope for reconciliation</td></tr>
+<tr><td>API docs</td><td>springdoc OpenAPI / Swagger UI</td><td>Try the API in a browser</td></tr>
+<tr><td>Testing</td><td>JUnit 6, AssertJ, jqwik, Testcontainers 2 (Postgres, LocalStack)</td><td>Real database and real AWS APIs in tests; property-based testing for money maths</td></tr>
+<tr><td>Local AWS</td><td>LocalStack 4.14 (pinned)</td><td>SNS/SQS/S3/Secrets Manager on a laptop; newer images need a paid token</td></tr>
+<tr><td>Infra</td><td>Terraform, ECS Fargate, RDS, ALB</td><td>Infrastructure as code; serverless containers</td></tr>
+<tr><td>CI/CD</td><td>GitHub Actions + AWS OIDC</td><td>Test on every push; deploy without stored AWS keys</td></tr>
+<tr><td>Load test</td><td>k6</td><td>Constant-arrival-rate scenarios, percentiles</td></tr>
+</table></div>
+</section>
+
+<!-- ======================================================= -->
+<section id="hld">
+<h2>High-level design</h2>
+<p>Full document: <a href="HLD.md">docs/HLD.md</a>.</p>
+
+<h3>Architecture</h3>
+<pre class="mermaid">
+flowchart LR
+    M([Merchant backend]) -- "REST + JWT&lt;br/&gt;Idempotency-Key" --> ALB[ALB]
+    ALB --> API
+    subgraph API [ledgerflow-api]
+        direction TB
+        PAY[Payments&lt;br/&gt;state machine] --> LED[Double-entry&lt;br/&gt;ledger]
+        PAY --> OUT[(Outbox rows)]
+        RELAY[Outbox relay] --> OUT
+        POLL[Status poller]
+        DISP[Webhook dispatcher]
+        REC[Reconciler]
+    end
+    API <-- "SQL" --> PG[(PostgreSQL&lt;br/&gt;RDS)]
+    PAY -- "collect&lt;br/&gt;timeout + retry" --> BANK[mock-bank&lt;br/&gt;UPI-style PSP]
+    POLL -- "status?" --> BANK
+    RELAY -- publish --> SNS{{SNS&lt;br/&gt;payment-events}}
+    SNS --> Q1[[SQS webhook-delivery]]
+    Q1 --> DISP
+    Q1 -. "after 5 tries" .-> DLQ1[[DLQ]]
+    DISP -- "POST, HMAC-SHA256 signed" --> M
+    SM[(Secrets Manager)] -. signing keys .-> DISP
+    SCHED((EventBridge&lt;br/&gt;Scheduler&lt;br/&gt;00:30 IST)) --> Q2[[SQS settlement-trigger]] --> BANK
+    BANK -- "settlement.csv" --> S3[(S3)]
+    S3 -- "ObjectCreated" --> Q3[[SQS settlement-files]] --> REC
+    REC -- "report.json" --> S3
+</pre>
+
+<h3>Components</h3>
+<div class="table-wrap"><table>
+<tr><th>Component</th><th>Responsibility</th></tr>
+<tr><td><b>ledgerflow-api</b></td><td>REST API, payment state machine, ledger, idempotency, outbox relay, status poller, webhook dispatcher, reconciliation. Stateless: any number of instances.</td></tr>
+<tr><td><b>mock-bank</b></td><td>Simulated UPI bank. Deliberately chaotic: random delays, 503s, hangs (lost responses) and "pending" answers. Deduplicates collects by payment id. Writes the nightly settlement CSV to S3, and can plant mistakes in it on request.</td></tr>
+<tr><td><b>PostgreSQL</b></td><td>The single source of truth. Ledger rules enforced here too.</td></tr>
+<tr><td><b>SNS → SQS</b></td><td>Event fan-out and durable work queues with dead-letter queues.</td></tr>
+<tr><td><b>S3</b></td><td>Settlement files in, reconciliation reports out.</td></tr>
+<tr><td><b>merchant-receiver</b> (demo)</td><td>Python stand-in for a merchant: verifies signatures independently and fails a share of requests on purpose.</td></tr>
+</table></div>
+
+<h3>Create and capture: sequence</h3>
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant M as Merchant
+    participant API as ledgerflow-api
+    participant DB as PostgreSQL
+    participant B as mock-bank
+    M->>API: POST /v1/payments (Idempotency-Key)
+    API->>DB: claim idempotency key
+    API->>DB: tx1: insert payment CREATED + outbox event
+    API->>B: collect (timeout 2s, 2 retries)
+    B-->>API: APPROVED / DECLINED / PENDING / no answer
+    API->>DB: tx2: AUTHORIZED / FAILED / PENDING_CONFIRMATION + outbox event
+    API->>DB: store response for the key
+    API-->>M: 201 payment
+    M->>API: POST /v1/payments/{id}/capture
+    API->>DB: one tx: lock payment, CAPTURED, journal entry, balances, outbox
+    API-->>M: 200 CAPTURED
+</pre>
+
+<h3>Payment lifecycle</h3>
+<pre class="mermaid">
+stateDiagram-v2
+    [*] --> CREATED
+    CREATED --> AUTHORIZED: bank approves
+    CREATED --> PENDING_CONFIRMATION: bank pending / no answer
+    CREATED --> FAILED: bank declines
+    PENDING_CONFIRMATION --> AUTHORIZED: poller confirms
+    PENDING_CONFIRMATION --> FAILED: declined / no record / timed out
+    AUTHORIZED --> CAPTURED: capture (journal entry)
+    CAPTURED --> SETTLED: in bank settlement file
+    CAPTURED --> PARTIALLY_REFUNDED
+    CAPTURED --> REFUNDED
+    SETTLED --> PARTIALLY_REFUNDED
+    SETTLED --> REFUNDED
+    PARTIALLY_REFUNDED --> PARTIALLY_REFUNDED
+    PARTIALLY_REFUNDED --> REFUNDED
+    FAILED --> [*]
+    REFUNDED --> [*]
+</pre>
+</section>
+
+<!-- ======================================================= -->
+<section id="lld">
+<h2>Low-level design</h2>
+<p>Full document: <a href="LLD.md">docs/LLD.md</a>.</p>
+
+<h3>Core classes</h3>
+<pre class="mermaid">
+classDiagram
+    class PaymentController
+    class IdempotencyService {
+        +execute(merchantId, key, method, path, body, action)
+    }
+    class PaymentService {
+        +createAndAuthorize()
+        +capture()
+        +refund()
+    }
+    class PaymentConfirmationService {
+        +applyAuthorization()
+        +applyStatusCheck()
+    }
+    class LedgerService {
+        +post(JournalEntryDraft)
+    }
+    class BankGateway {
+        &lt;&lt;interface&gt;&gt;
+        +authorize()
+        +checkStatus()
+    }
+    class PaymentStatusPoller {
+        +pollOnce()
+    }
+    class OutboxRelay {
+        +relayOnce()
+    }
+    class WebhookDispatcher {
+        +dispatch(body, receiveCount)
+    }
+    class Reconciler {
+        &lt;&lt;pure&gt;&gt;
+        +reconcile()
+    }
+    PaymentController --> IdempotencyService
+    PaymentController --> PaymentService
+    PaymentService --> LedgerService
+    PaymentService --> BankGateway
+    PaymentService --> PaymentConfirmationService
+    PaymentStatusPoller --> BankGateway
+    PaymentStatusPoller --> PaymentConfirmationService
+    BankGateway <|.. HttpBankGateway
+    WebhookListener --> WebhookDispatcher
+    SettlementFileListener --> ReconciliationService
+    ReconciliationService --> Reconciler
+</pre>
+
+<h3>Data model</h3>
+<pre class="mermaid">
+erDiagram
+    MERCHANT ||--o{ PAYMENT : receives
+    PAYMENT ||--o{ REFUND : has
+    PAYMENT ||--o{ JOURNAL_ENTRY : "posted for"
+    JOURNAL_ENTRY ||--|{ JOURNAL_LINE : "2+ lines"
+    ACCOUNT ||--o{ JOURNAL_LINE : "debited/credited"
+    REFUND }o--|| JOURNAL_ENTRY : "reversal entry"
+    MERCHANT {
+        uuid id PK
+        int fee_bps
+        text webhook_url
+    }
+    ACCOUNT {
+        uuid id PK
+        text account_type
+        text owner_id
+        bigint balance
+        bool allow_negative
+    }
+    PAYMENT {
+        uuid id PK
+        bigint amount
+        bigint fee_amount
+        bigint refunded_amount
+        text status
+        timestamptz next_status_check_at
+    }
+    JOURNAL_ENTRY {
+        uuid id PK
+        text entry_type
+        uuid reverses_entry_id FK
+    }
+    JOURNAL_LINE {
+        uuid id PK
+        text direction
+        bigint amount
+    }
+</pre>
+<p>Supporting tables: <code>idempotency_key</code>, <code>outbox_event</code>, <code>webhook_delivery</code>,
+<code>reconciliation_report</code>. All money is <code>BIGINT</code> paise.</p>
+
+<h3>Rules the database enforces on its own</h3>
+<div class="table-wrap"><table>
+<tr><th>Rule</th><th>Mechanism</th></tr>
+<tr><td>Journal is append-only</td><td><code>BEFORE UPDATE OR DELETE / TRUNCATE</code> triggers raise an error. Mistakes are fixed with reversal entries.</td></tr>
+<tr><td>Every entry balances</td><td>Deferred constraint trigger: at COMMIT, each entry needs ≥ 2 lines and debits = credits</td></tr>
+<tr><td>No customer overdraft</td><td><code>CHECK (allow_negative OR balance &gt;= 0)</code></td></tr>
+<tr><td>Refunds ≤ amount, fee ≤ amount</td><td><code>CHECK</code> constraints on <code>payment</code></td></tr>
+<tr><td>Idempotent webhook consumer</td><td><code>webhook_delivery.event_id</code> primary key</td></tr>
+</table></div>
+
+<h3>Journal entries: worked example</h3>
+<p>₹250 payment (25,000 paise), fee 2% (500 paise), then a ₹100 refund.</p>
+<div class="table-wrap"><table>
+<tr><th>Entry</th><th>Account</th><th>Debit</th><th>Credit</th></tr>
+<tr><td rowspan="3"><b>Capture</b></td><td>Customer</td><td>25,000</td><td></td></tr>
+<tr><td>Merchant receivable</td><td></td><td>24,500</td></tr>
+<tr><td>Platform fee</td><td></td><td>500</td></tr>
+<tr><td rowspan="3"><b>Refund</b></td><td>Merchant receivable</td><td>9,800</td><td></td></tr>
+<tr><td>Platform fee</td><td>200</td><td></td></tr>
+<tr><td>Customer</td><td></td><td>10,000</td></tr>
+</table></div>
+<p>Fee returned on a refund uses <b>cumulative rounding</b>: <code>round(fee × refundedSoFar / amount) − round(fee × refundedBefore / amount)</code>.
+Any sequence of partial refunds therefore returns exactly the original fee. A jqwik property checks this.</p>
+
+<h3>Ledger posting algorithm (<code>LedgerService.post</code>)</h3>
+<pre><code>1. Look up each account's posting rule (type, allow_negative). No lock.
+2. Guarded accounts (customers): SELECT … FOR UPDATE ORDER BY id
+   → apply lines in Java → InsufficientFundsException if balance &lt; 0
+3. INSERT journal_entry + journal_lines, flush
+4. Unguarded accounts (merchant, fee, bank), in id order:
+   UPDATE account SET balance = balance + :delta     ← atomic, no read, issued last
+COMMIT → deferred trigger verifies debits = credits</code></pre>
+<ul>
+<li><b>No deadlocks:</b> every transaction takes locks in the same global order.</li>
+<li><b>Hot accounts:</b> the platform-fee row is touched by every capture. Updating it last, without reading
+it, shrinks its lock hold time to "step 4 → COMMIT". Load testing showed this was the main bottleneck before.</li>
+</ul>
+
+<h3>Idempotency</h3>
+<pre class="mermaid">
+flowchart TD
+    A[POST with Idempotency-Key] --> B{"INSERT key ON CONFLICT DO NOTHING"}
+    B -- inserted --> C[Run the action]
+    C -- success --> D[Store status + body, COMPLETED] --> E[Return response]
+    C -- exception --> F[Delete key so client can retry] --> G[Return error]
+    B -- conflict --> H{Same request hash?}
+    H -- no --> I[422 IDEMPOTENCY_KEY_REUSED]
+    H -- yes --> J{Status}
+    J -- IN_PROGRESS --> K[409 IDEMPOTENCY_KEY_IN_USE]
+    J -- COMPLETED --> L[Replay stored response&lt;br/&gt;Idempotent-Replayed: true]
+</pre>
+<p>Keys are namespaced <code>merchantId:key</code>, hashed over method + path + the re-serialized parsed body, and
+expire after 24 h.</p>
+
+<h3>Unreliable bank handling</h3>
+<div class="table-wrap"><table>
+<tr><th>Setting</th><th>Value</th></tr>
+<tr><td>Timeouts</td><td>connect 1 s, read 2 s</td></tr>
+<tr><td>Retries (authorize)</td><td>2 retries, exponential 200 ms → 1 s with jitter, only on I/O errors and 5xx</td></tr>
+<tr><td>No definite answer</td><td><code>PENDING_CONFIRMATION</code>, next check in 5 s</td></tr>
+<tr><td>Poller</td><td>every 5 s, batch 50, claim with <code>FOR UPDATE SKIP LOCKED</code> + 1-minute lease, bank calls on virtual threads</td></tr>
+<tr><td>Per-payment backoff</td><td>5 s × 2<sup>attempts</sup>, max 5 min</td></tr>
+<tr><td>Give up</td><td>bank has no record after 2 min → <code>FAILED</code>; still pending after 30 min → <code>FAILED</code> (reconciliation catches a late collect)</td></tr>
+</table></div>
+
+<h3>Webhooks</h3>
+<p>Header: <code>X-LedgerFlow-Signature: t=&lt;unix&gt;,v1=hex(HMAC_SHA256(secret, t + "." + rawBody))</code>, plus
+<code>X-LedgerFlow-Event-Id</code> and <code>X-LedgerFlow-Event-Type</code>. Retry timeline: attempt 1 → +10 s → 2 → +20 s → 3 →
++40 s → 4 → +80 s → 5 → DLQ. The backoff is the SQS message's own visibility timeout, so there's no retry
+table and no scheduler.</p>
+
+<h3>Reconciliation rules</h3>
+<div class="table-wrap"><table>
+<tr><th>Case</th><th>Classified as</th></tr>
+<tr><td>Payment id appears twice in the bank file</td><td><code>DUPLICATE</code></td></tr>
+<tr><td>Bank row, LedgerFlow doesn't consider it collected</td><td><code>MISSING_IN_LEDGER</code></td></tr>
+<tr><td>Both have it, amounts differ</td><td><code>AMOUNT_MISMATCH</code></td></tr>
+<tr><td>LedgerFlow collected it that IST day, bank file doesn't list it</td><td><code>MISSING_IN_BANK</code></td></tr>
+<tr><td>Otherwise</td><td>matched → <code>SETTLED</code></td></tr>
+</table></div>
+</section>
+
+<!-- ======================================================= -->
+<section id="aws">
+<h2>AWS: where each service is used and why</h2>
+<p>All of it is in <code>infra/terraform</code>. Locally, LocalStack creates the same SNS, SQS, S3 and Secrets Manager
+resources (<code>infra/localstack/init-aws.sh</code>), so <b>the application code is the same in both places</b>; only
+endpoints and names change, through environment variables.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Service</th><th>What it does here</th><th>Why this service</th><th>Code / config</th></tr>
+<tr><td><b>ECS Fargate</b></td><td>Runs the <code>ledgerflow-api</code> (0.5 vCPU, 1 GB) and <code>mock-bank</code> (0.25 vCPU, 512 MB) containers</td><td>No servers to manage; rolling deploys; circuit breaker rolls back a bad release</td><td><code>ecs.tf</code></td></tr>
+<tr><td><b>Application Load Balancer</b></td><td>Public entry point; health checks <code>/actuator/health</code></td><td>Spreads requests across API tasks; the only internet path to the API</td><td><code>ecs.tf</code></td></tr>
+<tr><td><b>RDS PostgreSQL</b></td><td>All data (db.t4g.micro, private subnets)</td><td>Managed backups and patching; the ledger needs ACID, row locks and triggers</td><td><code>data.tf</code></td></tr>
+<tr><td><b>SNS</b> <code>payment-events</code></td><td>Every payment event is published here by the outbox relay (<code>PublishBatch</code>, 10 per call)</td><td>Fan-out: new consumers (fraud, analytics) subscribe without touching the producer</td><td><code>OutboxRelay.java</code></td></tr>
+<tr><td><b>SQS</b> <code>webhook-delivery</code> + DLQ</td><td>Buffers events for the webhook dispatcher</td><td>Durable; visibility timeout = retry timer; redrive to DLQ after 5 receives</td><td><code>WebhookListener.java</code></td></tr>
+<tr><td><b>SQS</b> <code>settlement-trigger</code></td><td>Tells mock-bank to write the daily file</td><td>Decouples the schedule from the service</td><td><code>SettlementTriggerListener.java</code></td></tr>
+<tr><td><b>SQS</b> <code>settlement-files</code> + DLQ</td><td>Receives S3 "object created" events</td><td>Reconciliation runs as soon as the file lands; poison files go to the DLQ after 3 tries</td><td><code>SettlementFileListener.java</code></td></tr>
+<tr><td><b>S3</b></td><td><code>settlements/&lt;date&gt;/settlement.csv</code> in, <code>reports/&lt;date&gt;.json</code> out</td><td>Cheap durable files + event notifications; encrypted, private, 90-day expiry</td><td><code>ReconciliationService.java</code>, <code>S3SettlementStore.java</code></td></tr>
+<tr><td><b>EventBridge Scheduler</b></td><td>Fires daily at 00:30 Asia/Kolkata</td><td>Managed cron with time zones; nothing always-on</td><td><code>messaging.tf</code></td></tr>
+<tr><td><b>Secrets Manager</b></td><td>JWT signing key, webhook signing key, RDS master password (RDS-managed)</td><td>No secrets in code, images or Terraform vars; rotation without redeploy (5-min cache)</td><td><code>WebhookSigningKeyProvider.java</code>, <code>data.tf</code></td></tr>
+<tr><td><b>ECR</b></td><td>Private image registry for both services</td><td>Next to ECS; lifecycle policy trims old images</td><td><code>data.tf</code>, CI</td></tr>
+<tr><td><b>CloudWatch</b></td><td>Logs (14 days), Micrometer metrics (namespace <code>LedgerFlow</code>), 6 alarms, dashboard</td><td>One place for app and AWS metrics</td><td><code>observability.tf</code>, <code>dashboard.tf</code></td></tr>
+<tr><td><b>Cloud Map</b></td><td>Private DNS <code>mock-bank.ledgerflow.local</code></td><td>Service discovery without a second load balancer</td><td><code>ecs.tf</code></td></tr>
+<tr><td><b>IAM + GitHub OIDC</b></td><td>Per-service task roles; a deploy role GitHub Actions can assume only from <code>main</code></td><td>Least privilege; no long-lived AWS keys in GitHub</td><td><code>github_oidc.tf</code></td></tr>
+<tr><td><b>VPC</b></td><td>2 public subnets (ALB, tasks), 2 private (RDS); no NAT gateway</td><td>DB unreachable from the internet; tasks accept traffic only from the ALB; saves ~$35/month</td><td><code>network.tf</code></td></tr>
+<tr><td><b>AWS Budgets</b></td><td>Emails at 50%, 80% and 100% (forecast) of the monthly budget</td><td>Cost guard</td><td><code>observability.tf</code></td></tr>
+</table></div>
+
+<div class="warn"><b>Deployment status, and how to describe it.</b> The AWS setup is fully written in Terraform (it passes
+<code>terraform validate</code>) and the CI pipeline has a deploy job ready for it, but it has never been applied:
+the always-on parts (ALB ~$18, Fargate ~$25, RDS ~$15, public IPv4 ~$14) come to about $70–80/month. An
+accurate way to say it: <i>"The AWS infrastructure is all in Terraform and the pipeline deploys to ECS through
+OIDC. I run it locally against LocalStack, which exercises the same SNS, SQS, S3 and Secrets Manager APIs, rather than
+paying about $75 a month to keep it up."</i> If you'd rather say "it was deployed", deploy it once for an hour
+(about $0.10), take screenshots of the dashboard, then run <code>terraform destroy</code>.</div>
+</section>
+
+<!-- ======================================================= -->
+<section id="folders">
+<h2>Folder structure</h2>
+<pre><code>LedgerFlow/
+├── pom.xml                      Maven parent (modules: common, ledgerflow-api, mock-bank)
+├── mvnw, mvnw.cmd, .mvn/        Maven wrapper (no Maven install needed)
+├── Dockerfile                   Multi-stage: build module → extract layers → JRE, non-root
+├── docker-compose.yml           Postgres, LocalStack, mock-bank, ledgerflow-api, merchant-receiver
+├── README.md                    Summary, results, trade-offs
+├── docs/                        HLD.md, LLD.md, guide.html (this page)
+├── .github/workflows/ci.yml     Build + test on every push/PR; deploy to ECS from main
+│
+├── common/                      Contracts shared by both services (no Spring)
+│   └── bank/ settlement/ webhook/ error/
+│
+├── ledgerflow-api/              The payments service
+│   ├── src/main/java/com/ledgerflow/api/
+│   │   ├── web/                 PaymentController, RFC 7807 error handler, DTOs
+│   │   ├── idempotency/         Claim / replay / release of Idempotency-Keys
+│   │   ├── payment/             Payment entity + state machine, services, status poller, fees
+│   │   ├── ledger/              LedgerService, accounts, journal entries/lines
+│   │   ├── bank/                HttpBankGateway (timeouts, retries), AuthorizationResult
+│   │   ├── outbox/              Event publisher (writes rows), relay (rows → SNS)
+│   │   ├── webhook/             SQS listener, dispatcher (sign + POST), signing key cache
+│   │   ├── reconciliation/      Pure Reconciler, service, S3-event listener, ops API
+│   │   ├── merchant/  config/  support/
+│   ├── src/main/resources/
+│   │   ├── application.yml (+ -local, -compose, -aws profiles)
+│   │   └── db/migration V1..V4,  db/seed (demo + 1,000 customers),  seed-local, seed-compose
+│   └── src/test/java/…          Unit, jqwik properties, Testcontainers integration tests
+│
+├── mock-bank/                   Chaotic UPI bank simulator + settlement file generator
+│
+├── infra/
+│   ├── terraform/               network, data (RDS, ECR, secrets), messaging, ecs,
+│   │                            observability, dashboard, github_oidc, variables, outputs
+│   ├── localstack/init-aws.sh   Same AWS resources for local runs and tests
+│   └── README.md                Deploy, cost, teardown
+│
+├── loadtest/payments.js         k6 script (create + capture at a constant rate)
+└── tools/                       Python, standard library only
+    ├── merchant_receiver.py     Demo merchant, verifies signatures, fails some requests
+    ├── chaos_run.py             N payments vs the chaotic bank, then compares with bank records
+    ├── reconcile_run.py         Plants discrepancies, scores the reconciliation report
+    └── mint_token.py            Mints JWTs for a deployed environment</code></pre>
+</section>
+
+<!-- ======================================================= -->
+<section id="pipeline">
+<h2>Pipelines</h2>
+
+<h3>CI/CD (GitHub Actions)</h3>
+<pre class="mermaid">
+flowchart LR
+    P[push / PR] --> B["Build job&lt;br/&gt;mvn verify: unit + jqwik + Testcontainers ITs"]
+    B -- "main only, AWS_DEPLOY_ROLE_ARN set" --> O[Assume AWS role via OIDC]
+    O --> I[Build both images, push to ECR&lt;br/&gt;tag = commit SHA]
+    I --> MB[Deploy mock-bank to ECS, wait stable]
+    MB --> AP[Deploy ledgerflow-api to ECS, wait stable]
+    AP -- unhealthy --> RB[ECS circuit breaker rolls back]
+</pre>
+<ul>
+<li>Pull requests only build and test. Failed runs upload surefire/failsafe reports.</li>
+<li>The deploy job uses short-lived OIDC credentials; the IAM role trusts only this repo's <code>main</code> branch.</li>
+<li>mock-bank deploys first because a new API version may depend on it.</li>
+<li>Deploys don't overlap (<code>concurrency: deploy-production</code>).</li>
+</ul>
+
+<h3>Event pipeline</h3>
+<pre class="mermaid">
+flowchart LR
+    TX["Business tx&lt;br/&gt;(state change + outbox row)"] --> OB[(outbox_event)]
+    OB -- "relay, 500 ms&lt;br/&gt;SKIP LOCKED, batch 100" --> SNS{{SNS}}
+    SNS -- raw delivery --> Q[[webhook-delivery]]
+    Q -- "≤10 concurrent" --> D[Dispatcher]
+    D -- "2xx" --> OK[DELIVERED]
+    D -- "fail: visibility 10s·2^n" --> Q
+    Q -- "5th receive" --> DLQ[[DLQ + alarm]]
+</pre>
+
+<h3>Reconciliation pipeline</h3>
+<pre class="mermaid">
+flowchart LR
+    S((00:30 IST)) --> T[[settlement-trigger]] --> MB[mock-bank]
+    MB --> CSV[(S3 settlements/date/settlement.csv)]
+    CSV -- ObjectCreated --> F[[settlement-files]] --> R[Reconciler]
+    R --> DB[(reconciliation_report)]
+    R --> J[(S3 reports/date.json)]
+    R --> ST[matched → SETTLED + events]
+</pre>
+</section>
+
+<!-- ======================================================= -->
+<section id="metrics">
+<h2>Metrics &amp; results</h2>
+<p>Measured on a 20-core laptop with everything in Docker Desktop.</p>
+<div class="grid">
+  <div class="stat"><div class="num">175/s</div><div class="lbl">payments sustained (347 req/s), 0 errors</div></div>
+  <div class="stat"><div class="num">66 ms</div><div class="lbl">create p99 (p50 33 ms)</div></div>
+  <div class="stat"><div class="num">180 ms</div><div class="lbl">capture p99 (p50 19 ms)</div></div>
+  <div class="stat"><div class="num">0 paise</div><div class="lbl">imbalance after ~520,000 journal lines</div></div>
+  <div class="stat"><div class="num">100%</div><div class="lbl">planted reconciliation mistakes caught, 0 false alarms</div></div>
+  <div class="stat"><div class="num">98.9%</div><div class="lbl">webhooks delivered to a merchant failing 30% of requests</div></div>
+</div>
+
+<div class="table-wrap"><table>
+<tr><th>Test</th><th>Result</th><th>How</th></tr>
+<tr><td>Sustained load</td><td>175 payments/s = 347 req/s, 0 errors; saturates ~190/s</td><td>k6 constant arrival rate, 2 min, calm bank</td></tr>
+<tr><td>Ledger integrity under load</td><td>0 imbalance, 0 balance drift, 0 overdrafts</td><td>SQL audit after the run</td></tr>
+<tr><td>1,000 concurrent debits of one account funded for 500</td><td>exactly 500 posted, 0 overdraft, 0 deadlocks</td><td><code>ConcurrentTransfersIT</code></td></tr>
+<tr><td>1,000 concurrent transfers both directions, 5 accounts</td><td>0 imbalance, 0 deadlocks</td><td><code>ConcurrentTransfersIT</code></td></tr>
+<tr><td>Retry storms: 200 creates on 1 key, 200 captures, 300 refunds</td><td>0 duplicate charges; refunds never exceed capture</td><td><code>RetryStormIT</code></td></tr>
+<tr><td>300 payments vs a bank where ~1 in 4 calls misbehaves</td><td>0 stuck, 0 disagreements with the bank</td><td><code>tools/chaos_run.py</code>, <code>UnreliableBankIT</code></td></tr>
+<tr><td>Reconciliation, 40 planted mistakes in a 292-row file</td><td>40/40 caught, 0 false alarms</td><td><code>tools/reconcile_run.py</code>, jqwik property</td></tr>
+<tr><td>Webhooks, merchant failing 30%</td><td>98.9% delivered after retries, 7 of 640 to DLQ, 0 bad signatures</td><td><code>WebhookDeliveryIT</code>, receiver stats</td></tr>
+<tr><td>Test suite</td><td>65 unit, 9 jqwik properties (up to 1,000 cases each), 44 integration</td><td><code>./mvnw verify</code></td></tr>
+</table></div>
+
+<h3>Bottlenecks the load test found, and the fixes</h3>
+<div class="table-wrap"><table>
+<tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+<tr><td>Captures queued behind each other</td><td>Every capture locked the platform-fee and merchant rows for the whole transaction</td><td>Atomic increment of unguarded accounts, issued last</td></tr>
+<tr><td>Requests waiting for a DB connection</td><td>Each payment is several short commits; pool of 10 was too small</td><td>Hikari pool 30</td></tr>
+<tr><td>Outbox backlog growing</td><td>One SNS call per event</td><td><code>PublishBatch</code> (10 per call)</td></tr>
+<tr><td>Pending payments resolved slowly</td><td>Poller checked one payment at a time</td><td>Parallel checks on virtual threads; keep draining full batches (16,000 backlog cleared in &lt; 20 s)</td></tr>
+</table></div>
+
+<h3>Observability</h3>
+<div class="table-wrap"><table>
+<tr><th>Metric (Micrometer → CloudWatch <code>LedgerFlow</code>)</th><th>Meaning</th></tr>
+<tr><td><code>ledgerflow.bank.calls{operation, outcome}</code></td><td>Authorize/status calls by approved / declined / pending / notfound</td></tr>
+<tr><td><code>ledgerflow.outbox.published</code>, <code>…publish.failures</code></td><td>Relay throughput and SNS errors</td></tr>
+<tr><td><code>ledgerflow.webhooks.delivered{attempt}</code></td><td>Deliveries, by which attempt succeeded</td></tr>
+<tr><td><code>ledgerflow.webhooks.failed_attempts</code>, <code>…dead_lettered</code>, <code>…duplicates</code></td><td>Retry pressure, DLQ volume, redeliveries skipped</td></tr>
+<tr><td><code>ledgerflow.reconciliation.discrepancies</code></td><td>Discrepancies found per run</td></tr>
+</table></div>
+<p><b>Alarms</b> (email via SNS): webhook DLQ not empty, settlement-files DLQ not empty, API 5xx, no healthy API
+targets, RDS CPU high, RDS storage low. Plus the AWS Budgets alert. Logs are structured JSON (ECS format).</p>
+</section>
+
+<!-- ======================================================= -->
+<section id="scale">
+<h2>Scalability options</h2>
+<p>The API is stateless and every background job (relay, poller, webhooks, reconciliation) already shares work
+safely across instances (<code>SKIP LOCKED</code>, leases, SQS). So the first scaling step is just "more tasks"; after that,
+the database is the bottleneck.</p>
+<div class="table-wrap"><table>
+<tr><th>Target</th><th>Changes</th></tr>
+<tr><td>~1,000 payments/s</td><td>ECS auto-scaling on CPU / ALB requests per target; larger RDS instance with provisioned IOPS; RDS Proxy or PgBouncer so many tasks share few DB connections; Multi-AZ RDS for failover</td></tr>
+<tr><td>~5,000/s</td><td>Read replica for GETs and reports; partition <code>journal_line</code>, <code>outbox_event</code>, <code>idempotency_key</code> by time and drop old partitions instead of deleting; <b>split the hot platform-fee account into N sub-accounts</b> (pick one by hash) and sum them for reporting</td></tr>
+<tr><td>Beyond one database</td><td>Shard by merchant (each shard its own Postgres; a payment never spans merchants); replace the polling relay with CDC (Debezium → Kafka)</td></tr>
+<tr><td>Ordering</td><td>SNS/SQS FIFO with <code>MessageGroupId = paymentId</code>, or Kafka partitioned by payment id, if consumers need strict per-payment order</td></tr>
+<tr><td>Webhooks at scale</td><td>Per-merchant concurrency limits and circuit breakers so one slow merchant can't starve others; separate queues for large merchants</td></tr>
+<tr><td>Reconciliation at scale</td><td>Stream the CSV instead of loading it; chunk by payment-id range; run on its own worker service</td></tr>
+<tr><td>Multi-region</td><td>Active-passive: Aurora Global Database, Route 53 failover. Active-active for a ledger is hard (it needs a single writer per account).</td></tr>
+</table></div>
+</section>
+
+<!-- ======================================================= -->
+<section id="demo">
+<h2>Run the demo locally</h2>
+<p>About 15 minutes end to end. Commands are for <b>Windows PowerShell</b>, run from the repo root (<code>D:\Ledgerflow</code>).</p>
+
+<div class="note"><b>Before the interview:</b> start Docker Desktop, run step 1 once so images are built (the first
+build takes a few minutes), then leave the stack running. Have this page and Swagger UI open in tabs.</div>
+
+<div class="step"><div class="badge">0</div><div>
+<h4>Prerequisites</h4>
+<p>Docker Desktop (running), Python 3 (for the tools), Git. Java 21 only if you want to run the tests
+(step 13). Ports 5432, 4566, 8080, 8081 and 9090 must be free.</p>
+</div></div>
+
+<div class="step"><div class="badge">1</div><div>
+<h4>Start everything from a clean state</h4>
+<pre><code>docker compose down -v
+docker compose up -d --build
+docker compose ps</code></pre>
+<p><code>down -v</code> wipes old data so earlier runs don't clutter the reconciliation report. Wait until
+<code>localstack</code> and <code>postgres</code> show <code>(healthy)</code>, then check the API:</p>
+<pre><code>Invoke-RestMethod http://localhost:8080/actuator/health</code></pre>
+<p>Say: <i>"One command starts Postgres, LocalStack with the same queues/topic/bucket as AWS, the chaotic bank,
+the API and a fake merchant."</i></p>
+</div></div>
+
+<div class="step"><div class="badge">2</div><div>
+<h4>Show the API</h4>
+<p>Open <a href="http://localhost:8080/swagger-ui.html">http://localhost:8080/swagger-ui.html</a>. Point out
+the four payment endpoints and the <code>Idempotency-Key</code> header.</p>
+</div></div>
+
+<div class="step"><div class="badge">3</div><div>
+<h4>Set up a session in PowerShell</h4>
+<pre><code>$api   = "http://localhost:8080"
+$token = (Invoke-RestMethod -Method Post "$api/dev/token?merchantId=11111111-1111-1111-1111-111111111111").access_token
+$auth  = @{ Authorization = "Bearer $token" }
+function Post($path, $body, $key = [guid]::NewGuid().ToString()) {
+  Invoke-RestMethod -Method Post "$api$path" -Headers ($auth + @{ "Idempotency-Key" = $key }) -ContentType "application/json" -Body $body
+}</code></pre>
+<p>The demo merchant "Chai Point Demo" (2% fee) and customers <code>cust_alice</code>, <code>cust_bob</code> (₹10,000 each) and
+<code>cust_0001</code>…<code>cust_1000</code> (₹1,000 each) are seeded.</p>
+</div></div>
+
+<div class="step"><div class="badge">4</div><div>
+<h4>Create a payment</h4>
+<pre><code>$p = Post "/v1/payments" '{"customerId":"cust_alice","amount":25000}' "demo-order-1"
+$p</code></pre>
+<p>Amount is in paise (₹250). Status is usually <code>AUTHORIZED</code>. The bank is chaotic, so you may get
+<code>PENDING_CONFIRMATION</code> (great, see step 6) or <code>FAILED</code> (create another with a new key).</p>
+</div></div>
+
+<div class="step"><div class="badge">5</div><div>
+<h4>Prove idempotency</h4>
+<pre><code># same key, same body → same payment, replayed
+$r = Invoke-WebRequest -UseBasicParsing -Method Post "$api/v1/payments" -Headers ($auth + @{ "Idempotency-Key" = "demo-order-1" }) -ContentType "application/json" -Body '{"customerId":"cust_alice","amount":25000}'
+$r.Headers["Idempotent-Replayed"]; ($r.Content | ConvertFrom-Json).id
+
+# same key, different body → 422
+try { Post "/v1/payments" '{"customerId":"cust_alice","amount":999}' "demo-order-1" } catch { $_.Exception.Response.StatusCode.value__ }</code></pre>
+<p>Expect <code>true</code> and the same id as <code>$p.id</code>, then <code>422</code> (<code>IDEMPOTENCY_KEY_REUSED</code>).</p>
+</div></div>
+
+<div class="step"><div class="badge">6</div><div>
+<h4>(If pending) watch the poller resolve it</h4>
+<pre><code>Invoke-RestMethod "$api/v1/payments/$($p.id)" -Headers $auth</code></pre>
+<p>Run again after 15–30 seconds: it moves to <code>AUTHORIZED</code> or <code>FAILED</code> without anyone calling the API.</p>
+</div></div>
+
+<div class="step"><div class="badge">7</div><div>
+<h4>Capture and partially refund</h4>
+<pre><code>Post "/v1/payments/$($p.id)/capture" $null
+Post "/v1/payments/$($p.id)/refunds" '{"amount":10000}'
+(Invoke-RestMethod "$api/v1/payments/$($p.id)" -Headers $auth).status</code></pre>
+<p>Status goes <code>CAPTURED</code> → <code>PARTIALLY_REFUNDED</code>.</p>
+</div></div>
+
+<div class="step"><div class="badge">8</div><div>
+<h4>Show the ledger in the database</h4>
+<pre><code>docker compose exec -T postgres psql -U ledgerflow -d ledgerflow -c "SELECT e.entry_type, a.account_type, l.direction, l.amount FROM journal_line l JOIN journal_entry e ON e.id = l.entry_id JOIN account a ON a.id = l.account_id WHERE e.payment_id = '$($p.id)' ORDER BY e.created_at, l.direction DESC;"
+
+# whole-ledger check: must print 0
+docker compose exec -T postgres psql -U ledgerflow -d ledgerflow -c "SELECT SUM(CASE WHEN direction = 'DEBIT' THEN amount ELSE -amount END) AS imbalance_paise FROM journal_line;"
+
+# try to tamper with history: the database refuses
+docker compose exec -T postgres psql -U ledgerflow -d ledgerflow -c "UPDATE journal_line SET amount = 1;"</code></pre>
+<p>Expect 25,000 / 24,500 / 500 for the capture, 9,800 / 200 / 10,000 for the refund, <code>0</code> imbalance, and
+<code>ERROR: table journal_line is append-only</code>.</p>
+</div></div>
+
+<div class="step"><div class="badge">9</div><div>
+<h4>Overdraft is impossible</h4>
+<pre><code>$big = Post "/v1/payments" '{"customerId":"cust_bob","amount":5000000}'
+try { Post "/v1/payments/$($big.id)/capture" $null } catch { $_.Exception.Response.StatusCode.value__ }</code></pre>
+<p>₹50,000 against a ₹10,000 balance → <code>422</code> <code>INSUFFICIENT_FUNDS</code>, nothing written. (If the bank happened to
+decline or leave it pending, you'll see 409 instead; just run it again.)</p>
+</div></div>
+
+<div class="step"><div class="badge">10</div><div>
+<h4>Webhooks reached the merchant, signed</h4>
+<pre><code>docker compose exec -T merchant-receiver cat /tmp/receiver_stats.json
+docker compose exec -T postgres psql -U ledgerflow -d ledgerflow -c "SELECT event_type, status, attempts FROM webhook_delivery ORDER BY created_at DESC LIMIT 10;"</code></pre>
+<p>The receiver fails 10% of requests on purpose; <code>bad_signature</code> stays 0, and some rows show
+<code>attempts</code> &gt; 1 (retried through SQS).</p>
+</div></div>
+
+<div class="step"><div class="badge">11</div><div>
+<h4>Chaos run: hundreds of payments vs the misbehaving bank</h4>
+<pre><code>python tools/chaos_run.py 200</code></pre>
+<p>Prints the status mix right after create (some pending), waits for the poller, then compares every payment with
+the bank's own records. Expect <code>LedgerFlow vs bank mismatches: 0</code>.</p>
+</div></div>
+
+<div class="step"><div class="badge">12</div><div>
+<h4>Reconciliation with planted mistakes</h4>
+<pre><code>python tools/reconcile_run.py 5 5 5 5
+
+# the report through the ops-only API, and the files in (Local)S3
+$ops = (Invoke-RestMethod -Method Post "$api/dev/token?scope=ops").access_token
+Invoke-RestMethod "$api/v1/reconciliation/$(Get-Date -Format yyyy-MM-dd)" -Headers @{ Authorization = "Bearer $ops" } | Select-Object -ExpandProperty summary
+docker compose exec -T localstack awslocal s3 ls s3://ledgerflow-settlements --recursive</code></pre>
+<p>Plants 5 dropped, 5 duplicated, 5 wrong-amount and 5 phantom rows. Expect <code>20/20 = 100.0%</code> and
+<code>other discrepancies reported (not planted): 0</code>. The date is the IST business date.</p>
+</div></div>
+
+<div class="step"><div class="badge">13</div><div>
+<h4>(Optional) run the concurrency proof</h4>
+<pre><code># make sure this window uses JDK 21 (an older JDK on PATH fails with "class file version 65")
+$env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-21.0.13.21-hotspot"; $env:Path = "$env:JAVA_HOME\bin;$env:Path"
+.\mvnw.cmd -pl ledgerflow-api -am verify "-Dit.test=ConcurrentTransfersIT" "-Dtest=none" "-Dsurefire.failIfNoSpecifiedTests=false" "-Dfailsafe.failIfNoSpecifiedTests=false"</code></pre>
+<p>Needs Java 21 and Docker. Starts its own Postgres and LocalStack containers and prints <code>[proof]</code> lines (1,000
+concurrent transfers, 0 imbalance). The full suite is <code>.\mvnw.cmd verify</code> (several minutes).</p>
+</div></div>
+
+<div class="step"><div class="badge">14</div><div>
+<h4>(Optional, do last) load test</h4>
+<pre><code>docker compose down -v
+$env:BANK_ERROR_RATE="0"; $env:BANK_TIMEOUT_RATE="0"; $env:BANK_PENDING_RATE="0"; $env:BANK_DECLINE_RATE="0.02"
+$env:BANK_MIN_DELAY="5ms"; $env:BANK_MAX_DELAY="20ms"
+docker compose up -d
+docker run --rm --network ledgerflow_default -v "${PWD}/loadtest:/scripts" grafana/k6:2.3.0 run -e BASE=http://ledgerflow-api:8080 -e RATE=100 -e DURATION=30s /scripts/payments.js</code></pre>
+<p>A calm bank so k6 measures LedgerFlow, not injected chaos. Restarting mock-bank wipes its in-memory records,
+which is why this goes last. Afterwards close the PowerShell window (or <code>Remove-Item Env:BANK_*</code>) to restore chaos.</p>
+</div></div>
+
+<div class="step"><div class="badge">15</div><div>
+<h4>Shut down</h4>
+<pre><code>docker compose down       # keep data
+docker compose down -v    # wipe data</code></pre>
+</div></div>
+
+<h3>Troubleshooting</h3>
+<div class="table-wrap"><table>
+<tr><th>Problem</th><th>Fix</th></tr>
+<tr><td>Port already in use</td><td>Stop the other Postgres/app on 5432/8080, or <code>docker compose down</code> an old stack</td></tr>
+<tr><td>API not up after a minute</td><td><code>docker compose logs ledgerflow-api --tail 50</code>; it waits for LocalStack to be healthy</td></tr>
+<tr><td><code>localstack</code> never healthy</td><td><code>docker compose logs localstack</code>; image must stay 4.14.0</td></tr>
+<tr><td>Capture returns 409</td><td>The payment isn't <code>AUTHORIZED</code> (pending or failed). Check its status first</td></tr>
+<tr><td>Reconciliation shows unexpected MISSING_IN_BANK</td><td>Old data or a restarted mock-bank; redo from step 1 (<code>down -v</code>)</td></tr>
+<tr><td>Token expired</td><td>Re-run step 3 (tokens last 12 h)</td></tr>
+</table></div>
+</section>
+
+<!-- ======================================================= -->
+<section id="qa">
+<h2>Interview questions &amp; answers</h2>
+<p>Click a question to open the answer. Answers are written the way you'd say them.</p>
+
+<details class="qa"><summary><span class="n">Q1</span>Walk me through the architecture and the life of a payment.</summary><div class="a">
+<p>Two Spring Boot services and Postgres, plus AWS messaging. A merchant calls <code>POST /v1/payments</code> with a JWT and an
+Idempotency-Key. LedgerFlow claims the key, inserts the payment as <code>CREATED</code> with an outbox event in one
+transaction, then calls the bank <i>outside</i> any transaction. A second short transaction records the answer:
+<code>AUTHORIZED</code>, <code>FAILED</code> or <code>PENDING_CONFIRMATION</code>. Capture is one transaction that changes the status,
+posts a balanced journal entry (customer debit, merchant and fee credits) and writes an outbox row. The outbox
+relay publishes events to SNS; SNS feeds an SQS queue; a dispatcher signs and POSTs webhooks with retries and a DLQ.
+Every night the bank writes a settlement file to S3, which triggers reconciliation through another SQS queue, and
+matched payments become <code>SETTLED</code>.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q2</span>Why double-entry, and how do you guarantee the books always balance?</summary><div class="a">
+<p>Double-entry means every movement is recorded as equal debits and credits across accounts, so money can't
+appear or vanish: the sum over all lines is always zero. I enforce it at three levels:</p>
+<ul>
+<li>The Java <code>JournalEntryDraft</code> builder refuses an unbalanced draft.</li>
+<li>A <b>deferred constraint trigger</b> in Postgres checks at COMMIT that each entry has at least 2 lines and debits = credits, so even a bug or a manual SQL session can't commit an unbalanced entry.</li>
+<li>Journal tables are <b>append-only</b>: triggers reject UPDATE, DELETE and TRUNCATE. Corrections are reversal entries, which keeps a full audit trail.</li>
+</ul>
+<p>Account balances are a cached projection; tests run an independent SQL audit that recomputes every balance from the
+lines and checks for zero drift and zero global imbalance.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q3</span>Two captures hit the same customer at the same time. How do you stop an overdraft?</summary><div class="a">
+<p>Customer accounts are "guarded". Inside the capture transaction I lock them with <code>SELECT … FOR UPDATE</code>, check
+the balance in Java and write it back. The second transaction blocks on the row lock until the first commits,
+then sees the reduced balance and fails with <code>INSUFFICIENT_FUNDS</code>. As a last line of defence the table has
+<code>CHECK (allow_negative OR balance &gt;= 0)</code>.</p>
+<p>The test: fund one account for exactly 500 transfers and fire 1,000 concurrently. Exactly 500 succeed, 500 get
+insufficient funds, the balance ends at 0. If I remove the lock, the test fails: all 1,000 "succeed" because of
+lost updates. That proves the test really exercises the locking.</p>
+<p>Why not optimistic locking (<code>@Version</code>)? With 1,000 writers on one row, almost everyone conflicts and retries,
+which becomes a retry storm. Pessimistic locking queues them instead.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q4</span>How do you avoid deadlocks?</summary><div class="a">
+<p>A deadlock needs two transactions taking the same locks in opposite orders (A→B and B→A). I sort account ids and
+always lock guarded accounts in ascending id order, then update unguarded accounts in id order. With one global order
+there can't be a cycle. The test runs 1,000 random transfers in both directions across 5 accounts and asserts zero
+deadlock errors and an unchanged total.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q5</span>What is the "hot account" problem and how did you fix it?</summary><div class="a">
+<p>Every capture credits the same platform-fee account and the same merchant account. Originally I locked them like
+customer accounts, for the whole transaction, so all captures for a merchant queued on one row. The k6 load test
+showed it as rising capture latency.</p>
+<p>Those accounts may go negative, so there's nothing to check before writing. Now they get a single atomic
+<code>UPDATE account SET balance = balance + :delta</code>, issued last, just before COMMIT. Postgres still serializes
+writers on that row, but only for the moment between that statement and COMMIT. A test fires 1,000 concurrent
+credits at one such account and checks that all of them land. At larger scale, I'd split the fee account into N
+sub-accounts and pick one by hash.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q6</span>How does idempotency work? What about two identical requests at the exact same moment?</summary><div class="a">
+<p>Before doing any work I run <code>INSERT INTO idempotency_key … ON CONFLICT DO NOTHING</code> with
+<code>merchantId:key</code>, a hash of the request and status <code>IN_PROGRESS</code>. The primary key is the lock: exactly one of two
+concurrent requests inserts the row.</p>
+<ul>
+<li>The winner runs the action, then stores the status code and body as <code>COMPLETED</code>.</li>
+<li>A loser that arrives while the winner is still running gets <code>409 IN_PROGRESS</code>, and the client retries later.</li>
+<li>A later request with the same body gets the stored response replayed, with <code>Idempotent-Replayed: true</code>.</li>
+<li>The same key with a different body gets <code>422</code>.</li>
+</ul>
+<p>The hash covers the parsed and re-serialized body, so whitespace and key order don't matter.</p>
+<p>If the action throws, the key is released so the client can retry. One subtlety: once the payment row exists, create
+always returns it even if a later step fails. Otherwise releasing the key could let a retry create a second payment.
+<code>RetryStormIT</code> fires 200 concurrent creates with one key and asserts exactly one payment.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q7</span>The bank call times out. Did the customer pay? What do you do?</summary><div class="a">
+<p>A timeout means "unknown", not "failed": the bank may have collected and lost the response. So:</p>
+<ol>
+<li><b>Retry safely.</b> Up to 2 retries with exponential backoff and jitter, only for timeouts and 5xx. It's safe only because the bank deduplicates by payment id; a retry gets the original result instead of a second charge.</li>
+<li><b>Admit uncertainty.</b> Still unknown? The payment goes to <code>PENDING_CONFIRMATION</code>, and the merchant gets an event saying so.</li>
+<li><b>Follow up.</b> A status poller asks the bank later, with per-payment exponential backoff. Approved → <code>AUTHORIZED</code>; declined → <code>FAILED</code>. "No record" counts only after a 2-minute grace, because a request may still be in flight.</li>
+<li><b>Bound it.</b> After 30 minutes the payment fails with <code>CONFIRMATION_TIMEOUT</code>. If the bank had actually collected, the nightly reconciliation reports it as missing-in-ledger.</li>
+</ol>
+<p>The chaos run sends 300 payments through a bank where about 1 in 4 calls misbehaves, then compares every final status with the bank's records: 0 mismatches.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q8</span>Why not do create + bank call + update in one transaction?</summary><div class="a">
+<p>A transaction holds a database connection, and possibly row locks, for its whole duration. If the bank takes
+10 seconds, every in-flight payment holds a connection for 10 seconds; with a pool of 30, the 31st request waits,
+and a slow bank takes the whole API down. So it's two short transactions with the network call between them. The
+trade-off is a crash window between them: the payment stays <code>CREATED</code>. That's covered because every new
+payment is scheduled for a status check after 1 minute as a safety net.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q9</span>What is the transactional outbox and why did you use it?</summary><div class="a">
+<p>The dual-write problem: if I commit to Postgres and then publish to SNS, a crash between them loses the event; if I
+publish first and the transaction rolls back, I've announced something that didn't happen. With the outbox, the
+event is a row inserted in the <i>same</i> transaction as the state change, so both happen or neither does.</p>
+<p>A relay then reads unpublished rows with <code>FOR UPDATE SKIP LOCKED</code> (several instances can relay in
+parallel without double-sending), publishes them in batches of 10 with SNS <code>PublishBatch</code>, and marks them
+published. A crash after publishing but before marking means the row is sent again, so delivery is
+<b>at least once</b>. Consumers deduplicate by event id; the webhook consumer uses <code>event_id</code> as a primary key.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q10</span>How do webhook retries and the dead-letter queue work?</summary><div class="a">
+<p>The dispatcher consumes from SQS. On a non-2xx or a network error it sets that message's <b>visibility
+timeout</b> to the backoff (10 s, 20 s, 40 s, 80 s, capped at 5 min) and leaves it on the queue. SQS makes it
+visible again later: the queue itself is the retry scheduler, so there's no retry table and no cron. The queue's
+redrive policy moves the message to a DLQ after 5 receives, and a CloudWatch alarm fires when the DLQ isn't
+empty. Operators can fix the merchant's endpoint and redrive the DLQ.</p>
+<p>The <code>webhook_delivery</code> table records attempts and status and skips events already delivered, which handles
+duplicates from SNS, SQS or the relay. With a merchant failing 30% of requests, 98.9% were delivered after
+retries, and 7 of 640 went to the DLQ.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q11</span>How does a merchant know a webhook really came from you?</summary><div class="a">
+<p>Stripe-style signatures: <code>X-LedgerFlow-Signature: t=&lt;timestamp&gt;,v1=HMAC-SHA256(secret, t + "." + rawBody)</code>.</p>
+<ul>
+<li>The merchant recomputes the HMAC over the <i>raw</i> bytes and compares in constant time, which avoids timing attacks.</li>
+<li>The timestamp is inside the signature, so the merchant can reject anything older than about 5 minutes. That stops replay attacks.</li>
+</ul>
+<p>The secret lives in Secrets Manager and is cached for 5 minutes, so rotation needs no restart. I verified the scheme
+against an independent Python implementation (the demo merchant), which reported 0 bad signatures.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q12</span>Explain reconciliation. What edge cases did you handle?</summary><div class="a">
+<p>The bank's settlement file is the external truth. I match both sides by payment id and report four discrepancy types:</p>
+<ul>
+<li><b>Duplicate:</b> the bank listed a payment twice.</li>
+<li><b>Missing-in-ledger:</b> the bank has it, LedgerFlow doesn't consider it collected (for example a payment we timed out but the bank collected).</li>
+<li><b>Amount mismatch.</b></li>
+<li><b>Missing-in-bank:</b> we think it was collected, the bank doesn't list it.</li>
+</ul>
+<p>Matched payments become <code>SETTLED</code>. The matching is a pure function with no I/O, so a jqwik property plants
+random mixes of all four kinds and asserts each is reported exactly, with nothing extra. Edge cases:</p>
+<ul>
+<li>Business dates are IST.</li>
+<li>A payment collected just before midnight that appears in the next day's file still matches by id.</li>
+<li>A re-uploaded file produces a new report; the API serves the latest.</li>
+<li>A file that can't be processed goes to a DLQ after 3 tries.</li>
+</ul>
+<p>Measured: 40 of 40 planted mistakes caught, 0 false alarms.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q13</span>How do background jobs behave when you run several API instances?</summary><div class="a">
+<p>No leader election is needed. Each job claims work with <code>FOR UPDATE SKIP LOCKED</code>: rows another instance has locked
+are skipped, not waited on, so instances naturally split the work. The status poller goes further: it claims rows
+by pushing <code>next_status_check_at</code> forward by a 1-minute <b>lease</b> in one auto-committed statement, then calls
+the bank holding no database lock. If that instance dies, the lease expires and another instance picks the payment up.
+SQS consumers are naturally competing consumers. Reconciliation uses one message at a time.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q14</span>How did you test all this? How do you know the tests are meaningful?</summary><div class="a">
+<ul>
+<li><b>65 unit tests</b> for fee maths, hashing, signatures and the gateway's retry rules.</li>
+<li><b>9 jqwik property tests</b>, each with up to 1,000 generated cases: the ledger always balances, refunds never exceed the capture and always return exactly the fee, random operation sequences respect the state machine, and reconciliation finds every planted discrepancy.</li>
+<li><b>44 integration tests</b> with Testcontainers against real Postgres and LocalStack (no mocks of the database or AWS), plus scriptable fake bank and merchant servers.</li>
+</ul>
+<p>Every integration test ends with an independent SQL audit. To make sure the concurrency tests have teeth, I
+removed the lock and watched them fail. On top of that: a chaos script, a reconciliation scorer and a k6 load test
+against the real Docker stack.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q15</span>What did the load test show, and what did you change because of it?</summary><div class="a">
+<p>The k6 test runs create + capture at a constant arrival rate. The final result was 175 payments/s (347 req/s)
+for 2 minutes with 0 errors: create p99 66 ms, capture p99 180 ms, saturating around 190/s on a laptop. After about
+520,000 journal lines: zero imbalance. Four bottlenecks were fixed along the way:</p>
+<ol>
+<li>Hot-account locks: fixed with atomic increments issued last.</li>
+<li>Connection pool waits: pool raised from 10 to 30.</li>
+<li>Outbox backlog: one SNS call per event replaced with PublishBatch.</li>
+<li>A sequential status poller: replaced with virtual-thread parallel checks that drain full batches.</li>
+</ol>
+<p>The remaining limit is Postgres commit flushes inside Docker Desktop, i.e. disk fsync, not application code.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q16</span>How would you scale this to 10x or 100x?</summary><div class="a">
+<p><b>10x:</b> the API is stateless and the jobs already share work, so add ECS tasks with auto-scaling, use a bigger RDS
+instance, put RDS Proxy or PgBouncer in front so connections don't explode, and make RDS Multi-AZ.</p>
+<p><b>100x:</b></p>
+<ul>
+<li>Read replicas for GETs and reports.</li>
+<li>Time-partition the journal, outbox and idempotency tables.</li>
+<li>Split hot system accounts into sub-accounts.</li>
+<li>Shard by merchant: a payment never spans merchants, so each shard is an independent Postgres.</li>
+<li>Replace the polling outbox relay with CDC (Debezium → Kafka).</li>
+<li>Give each merchant its own webhook concurrency limits.</li>
+</ul>
+<p>The ledger's correctness model (row locks within one database) stays the same inside each shard, which is why
+merchant sharding is attractive.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q17</span>Why these AWS services? Walk me through the security setup.</summary><div class="a">
+<p>Each service matches a need:</p>
+<ul>
+<li>ECS Fargate: containers without managing servers.</li>
+<li>RDS: managed Postgres, since the ledger depends on Postgres features.</li>
+<li>SNS: fan-out of events.</li>
+<li>SQS: durable queues with built-in retry timing and DLQs.</li>
+<li>S3: files plus event notifications.</li>
+<li>EventBridge Scheduler: a time-zone-aware cron.</li>
+<li>Secrets Manager: keys and the database password.</li>
+</ul>
+<p>Security:</p>
+<ul>
+<li>RDS sits in private subnets with no internet route.</li>
+<li>Tasks accept traffic only from the ALB's security group, and the bank only from the API.</li>
+<li>Each service has its own IAM task role scoped to exact ARNs (for example, the API can only read <code>settlements/*</code> and write <code>reports/*</code>).</li>
+<li>Secrets are injected from Secrets Manager at start-up, never baked into images.</li>
+<li>GitHub deploys through OIDC: no stored AWS keys, and the role trusts only this repo's <code>main</code> branch.</li>
+</ul>
+<p>I skipped the NAT gateway (about $35/month); the trade-off is that tasks need public IPs. HTTPS on the ALB needs a domain and an ACM certificate.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q18</span>Events can arrive out of order. Is that a problem?</summary><div class="a">
+<p>Standard SNS and SQS don't guarantee order, and retries reorder further. So a merchant could see
+<code>payment.captured</code> before <code>payment.authorized</code>. Every event carries the full current <code>status</code> and an
+<code>occurredAt</code> timestamp, so a consumer can ignore events older than what it already has. If strict
+per-payment order were required, I'd use SNS FIFO + SQS FIFO with <code>MessageGroupId = paymentId</code>, accepting lower
+throughput. That's ordering per payment, not globally, which is all a merchant needs.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q19</span>Why store money as <code>long</code> paise? How are fees rounded?</summary><div class="a">
+<p>Floating point can't represent 0.1 exactly, so sums drift. <code>BigDecimal</code> works but is slower and easy to misuse
+(scale, equals). Integer paise is exact and fast; the API caps amounts at ₹1 crore so <code>amount × bps</code> can't
+overflow, and <code>Math.multiplyExact</code> guards it anyway. Fees are integer basis points with half-up rounding.</p>
+<p>For partial refunds, rounding each refund separately can leak a paisa. So I compute the <i>cumulative</i> fee
+returned after this refund minus what was already returned. Any split of refunds returns exactly the original fee,
+which is a jqwik property.</p>
+</div></details>
+
+<details class="qa"><summary><span class="n">Q20</span>What's missing for real production use? What would you do differently?</summary><div class="a">
+<ul>
+<li>HTTPS on the ALB (needs a domain and an ACM certificate) and mTLS or signed requests to the bank.</li>
+<li>Merchant onboarding and API-key management instead of seeded merchants.</li>
+<li>Multi-AZ RDS with tested point-in-time restore.</li>
+<li>Remote Terraform state (S3 with locking).</li>
+<li>A durable bank simulator (mock-bank keeps its state in memory).</li>
+<li>Rate limiting per merchant.</li>
+<li>PII handling and encryption policies.</li>
+<li>Distributed tracing (OpenTelemetry) across API, SQS and webhooks.</li>
+<li>Runbooks for DLQ redrive.</li>
+</ul>
+<p>Design-wise, at higher scale I'd move the outbox relay to CDC, and consider a FIFO or Kafka pipeline if merchants
+needed ordered events.</p>
+</div></details>
+</section>
+
+<!-- ======================================================= -->
+<section id="tradeoffs">
+<h2>Trade-offs &amp; known limits</h2>
+<div class="table-wrap"><table>
+<tr><th>Decision</th><th>Gain</th><th>Cost</th></tr>
+<tr><td>Pessimistic locks on customer accounts</td><td>No retry storms; simple correctness</td><td>Writers to one account queue up</td></tr>
+<tr><td>Atomic increments on system accounts</td><td>Hot rows locked only until commit</td><td>No read-check on those accounts (allowed: they may go negative)</td></tr>
+<tr><td>Two transactions around the bank call</td><td>Slow bank can't exhaust the pool</td><td>Crash window, covered by the poller</td></tr>
+<tr><td>At-least-once events</td><td>Simple, durable</td><td>Consumers must deduplicate by event id</td></tr>
+<tr><td>Standard SNS/SQS</td><td>High throughput, cheap</td><td>No ordering guarantee</td></tr>
+<tr><td>Polling outbox relay</td><td>No extra infrastructure</td><td>~500 ms latency, DB polling load</td></tr>
+<tr><td>No NAT gateway</td><td>~$35/month saved</td><td>Tasks need public IPs; egress not centralized</td></tr>
+<tr><td>Single-AZ RDS, local Terraform state, HTTP-only ALB</td><td>Cost and simplicity for a portfolio project</td><td>Not production-grade as is</td></tr>
+</table></div>
+</section>
+
+<!-- ======================================================= -->
+<section id="glossary">
+<h2>Glossary</h2>
+<div class="table-wrap"><table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>Paise</td><td>1/100 of a rupee. ₹250 = 25,000 paise.</td></tr>
+<tr><td>Basis point (bps)</td><td>0.01%. 200 bps = 2%.</td></tr>
+<tr><td>Authorize / capture</td><td>Authorize: the bank approves and reserves the money. Capture: the merchant claims it, and the ledger moves it.</td></tr>
+<tr><td>Settlement</td><td>The bank actually paying out; reported in its daily file.</td></tr>
+<tr><td>UTR</td><td>Unique Transaction Reference, the bank's id for a transfer (column in the CSV).</td></tr>
+<tr><td>VPA</td><td>Virtual Payment Address, a UPI id like <code>alice@upi</code>.</td></tr>
+<tr><td>PSP</td><td>Payment Service Provider; what mock-bank simulates.</td></tr>
+<tr><td>Idempotency</td><td>Doing the same request twice has the same effect as doing it once.</td></tr>
+<tr><td>Outbox</td><td>A table of events written in the same transaction as the change they describe.</td></tr>
+<tr><td>DLQ</td><td>Dead-letter queue: where messages go after too many failed attempts.</td></tr>
+<tr><td>Visibility timeout</td><td>How long an SQS message stays hidden after being received; if not deleted, it reappears.</td></tr>
+<tr><td><code>SKIP LOCKED</code></td><td>Postgres option: skip rows another transaction has locked instead of waiting.</td></tr>
+<tr><td>Deferred constraint</td><td>A check that runs at COMMIT instead of after each statement.</td></tr>
+<tr><td>OIDC</td><td>OpenID Connect; lets GitHub Actions prove its identity to AWS and get short-lived credentials.</td></tr>
+<tr><td>LocalStack</td><td>Runs AWS APIs (SNS, SQS, S3, Secrets Manager) locally in Docker.</td></tr>
+</table></div>
+</section>
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>
+(function () {
+  var root = document.documentElement;
+  try { var saved = localStorage.getItem('lf-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+
+  function isDark() {
+    var t = root.getAttribute('data-theme');
+    if (t) return t === 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  // Keep each diagram's source so it can be re-rendered when the theme changes.
+  var diagrams = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));
+  diagrams.forEach(function (el) { el.dataset.src = el.textContent; });
+
+  function renderDiagrams() {
+    if (!window.mermaid) return;
+    diagrams.forEach(function (el) { el.removeAttribute('data-processed'); el.innerHTML = ''; el.textContent = el.dataset.src; });
+    mermaid.initialize({ startOnLoad: false, theme: isDark() ? 'dark' : 'default', securityLevel: 'strict',
+      flowchart: { htmlLabels: true }, sequence: { mirrorActors: false } });
+    mermaid.run({ nodes: diagrams }).catch(function (e) { console.error(e); });
+  }
+  renderDiagrams();
+
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('lf-theme', next); } catch (e) {}
+    renderDiagrams();
+  });
+
+  var expanded = false;
+  document.getElementById('expand').addEventListener('click', function () {
+    expanded = !expanded;
+    document.querySelectorAll('details.qa').forEach(function (d) { d.open = expanded; });
+    this.textContent = expanded ? 'Collapse all answers' : 'Expand all answers';
+  });
+
+  // Copy buttons on code blocks (not diagrams).
+  document.querySelectorAll('pre:not(.mermaid)').forEach(function (pre) {
+    var btn = document.createElement('button');
+    btn.className = 'copy'; btn.type = 'button'; btn.textContent = 'Copy';
+    btn.addEventListener('click', function () {
+      var text = pre.querySelector('code') ? pre.querySelector('code').innerText : pre.innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1200);
+      });
+    });
+    pre.appendChild(btn);
+  });
+
+  // Highlight the current section in the sidebar.
+  var links = {};
+  document.querySelectorAll('nav.toc a').forEach(function (a) { links[a.getAttribute('href').slice(1)] = a; });
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && links[e.target.id]) {
+          Object.keys(links).forEach(function (k) { links[k].classList.remove('active'); });
+          links[e.target.id].classList.add('active');
+        }
+      });
+    }, { rootMargin: '-10% 0px -80% 0px' });
+    document.querySelectorAll('main section').forEach(function (s) { obs.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
