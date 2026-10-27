@@ -4,7 +4,9 @@
 locals {
   alb_dims = ["LoadBalancer", aws_lb.api.arn_suffix]
   # App metrics are found with SEARCH so the dashboard doesn't depend on Micrometer's exact naming.
-  app_search = "SEARCH('{LedgerFlow} %s', 'Sum', 60)"
+  # Match on the namespace, not the {LedgerFlow} schema: a schema only matches metrics without
+  # dimensions, and tagged counters (bank calls by operation/outcome) would be left out.
+  app_search = "SEARCH('Namespace=\"LedgerFlow\" %s', 'Sum', 60)"
 }
 
 resource "aws_cloudwatch_dashboard" "main" {
