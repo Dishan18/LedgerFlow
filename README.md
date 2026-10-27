@@ -11,7 +11,8 @@ the bank's settlement file. The bank is simulated by **mock-bank**, which is del
 unreliable: slow, sometimes down, sometimes "pending", and sometimes it loses responses.
 
 **Docs:** [High-level design](docs/HLD.md) · [Low-level design](docs/LLD.md) ·
-[Full guide](docs/guide.html) (architecture, AWS mapping, demo script, interview Q&A; open the file in a browser)
+[Full guide](docs/guide.html) (architecture, AWS mapping, demo script, interview Q&A; open the file in a browser) ·
+[Demo walkthrough](docs/walkthrough.md) (Windows start-up, what to show and say, quick Q&A)
 
 ## Architecture
 
